@@ -1,0 +1,77 @@
+# Production environment: application + PostgreSQL.
+#
+# Unlike the development file, the database is NOT published to the host — only
+# the app container can reach it, over the internal `backend` network.
+#
+#   cd docker/production && cp .env.example .env && docker compose up -d --build
+#
+# Credentials use the `:?` form, so compose fails fast with a clear message
+# rather than silently starting Postgres with a default password.
+#
+name: fcm-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: ../..
+      dockerfile: docker/production/Dockerfile
+    image: financial-crime-monitoring:${APP_VERSION:-0.0.1-SNAPSHOT}
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Relaxed binding maps these onto spring.datasource.* / spring.jpa.*,
+      # overriding the development defaults in application.properties.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      # Never mutate a production schema on boot — migrations own the schema.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-production}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      # `-f` makes curl exit non-zero on any non-2xx, so this checks real health
+      # rather than "something answered". Verified to return 200 as configured.
+      # When you add a SecurityConfig, keep /actuator/health permitted or this
+      # starts failing with 401.
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - backend
+    logging: *logging
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: fcm-postgres-data-prod

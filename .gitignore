@@ -1,5 +1,9 @@
 target/
 .mvn/wrapper/maven-wrapper.jar
+
+### Local secrets — commit only the .env.example templates ###
+.env
+docker/**/.env
 !**/src/main/**/target/
 !**/src/test/**/target/
 
