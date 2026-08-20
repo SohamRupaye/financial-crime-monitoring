@@ -1,151 +1,210 @@
 # Financial Crime Transaction Monitoring System
 
-A production-oriented backend system for **Anti-Money Laundering (AML) transaction monitoring**, built with Java 17 and Spring Boot.
+A backend system for **Anti-Money Laundering (AML) transaction monitoring**, built with
+Java 17 and Spring Boot 4.
 
-The system simulates how a financial institution can ingest transactions, evaluate them against configurable AML rules, calculate explainable risk scores, generate alerts, and manage investigations.
+The system models how a financial institution ingests transactions, evaluates them against
+configurable AML rules, calculates an explainable risk score, raises alerts, and hands them
+to an analyst for investigation.
 
-> **Disclaimer:** This project uses entirely synthetic transaction and customer data for educational and demonstration purposes. It is not intended to provide real-world financial, regulatory, or compliance advice.
+> **Disclaimer:** This project uses entirely synthetic transaction and customer data for
+> educational and demonstration purposes. It is not financial, regulatory, or compliance
+> advice, and the elevated-risk country list is illustrative rather than an official
+> classification.
+
+---
+
+## Status
+
+This is a project in progress, built feature by feature. The table below is the honest
+state of the code — everything marked *Planned* is designed but not yet written.
+
+| Capability | Status | Notes |
+|---|---|---|
+| Customer management | ✅ Built | Create, fetch, list with paging and risk-level filter |
+| Account management | 🚧 In progress | Entity, repository and service done; REST endpoints pending |
+| Transaction ingestion | 📋 Planned | Section 2 |
+| AML rules engine | 📋 Planned | Sections 4–5 — the core of the project |
+| Risk scoring | 📋 Planned | Section 6 |
+| Explainable assessments | 📋 Planned | Section 7 |
+| Alerts | 📋 Planned | Section 8 |
+| Investigation cases | 📋 Planned | Section 9 |
+| Synthetic data generator | 📋 Planned | Section 3 |
+| REST API | 🚧 In progress | Customers only so far |
+| Schema and migrations | 🚧 In progress | Flyway V1–V2: `customers`, `accounts` |
+| Testing | 🚧 In progress | Three-layer suite for customers; none yet for accounts |
+| Docker | ✅ Built | Dev and production compose stacks |
+| Authentication | 📋 Planned | Section 12 — **the API is currently open** |
+| Redis caching | 📋 Planned | Section 14 |
+| Event-driven processing | 📋 Planned | Section 15 |
+| Kubernetes / CI | 📋 Planned | Section 24 |
 
 ---
 
 ## Overview
 
-Financial institutions process large volumes of transactions every day. A transaction monitoring system helps identify activity that may warrant further investigation.
+Financial institutions process large volumes of transactions every day. A transaction
+monitoring system exists to surface the small fraction of that activity which warrants a
+human look.
 
-This project models that workflow:
+This project models that pipeline:
 
 ```text
-                    ┌──────────────────────┐
+                    ┌───────────────────────┐
                     │   Transaction Source  │
                     │  Synthetic / REST API │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
+                    └───────────┬───────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
                     │ Transaction Ingestion │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │    AML Rules Engine  │
-                    │                      │
-                    │ • Amount thresholds  │
-                    │ • Velocity checks    │
-                    │ • Structuring        │
-                    │ • Customer risk      │
-                    │ • Country risk       │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │    Risk Assessment   │
-                    │                      │
-                    │ Score + Explanation  │
-                    └──────────┬───────────┘
-                               │
-                  ┌────────────┴────────────┐
-                  ▼                         ▼
-             Low / Medium              High / Critical
-                  │                         │
-                  ▼                         ▼
-              Persist                 Generate Alert
-                                            │
-                                            ▼
-                                    Investigation Case
-                                            │
-                                            ▼
-                                      Analyst Review
+                    └───────────┬───────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │    AML Rules Engine   │
+                    │                       │
+                    │ • Amount thresholds   │
+                    │ • Velocity checks     │
+                    │ • Structuring         │
+                    │ • Customer risk       │
+                    │ • Country risk        │
+                    └───────────┬───────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │    Risk Assessment    │
+                    │                       │
+                    │  Score + Explanation  │
+                    └───────────┬───────────┘
+                                │
+                  ┌─────────────┴─────────────┐
+                  ▼                           ▼
+             Low / Medium                High / Critical
+                  │                           │
+                  ▼                           ▼
+              Persist                   Generate Alert
+                                              │
+                                              ▼
+                                      Investigation Case
+                                              │
+                                              ▼
+                                        Analyst Review
 ```
+
+Today the left-hand half of that diagram exists as far as persistence. The rules engine and
+everything downstream of it is the work in progress.
 
 ---
 
-# Core Features
+## 1. Customer and Account Management
 
-## 1. Customer Management
+> ✅ Customers built. 🚧 Accounts: service layer built, endpoints pending.
 
-The system maintains customer profiles used during transaction risk evaluation.
+Customer profiles are the reference data the rules engine reads when scoring a transaction.
 
-Each customer can contain:
+A customer carries:
 
-* Unique customer ID
-* Name
-* Account information
-* Country
-* Customer risk level
-* Account creation date
-* Status
-* Transaction history
-
-Example:
+* A `CUST-` business reference, used in URLs instead of the primary key
+* Name, email, date of birth
+* ISO 3166-1 alpha-2 country code
+* A standing risk level
+* Audit timestamps
 
 ```json
 {
-  "customerId": "CUST-1024",
-  "riskLevel": "MEDIUM",
-  "country": "IN",
-  "status": "ACTIVE"
+  "customerReference": "CUST-3F2A9C41",
+  "firstName": "Asha",
+  "lastName": "Menon",
+  "countryCode": "IN",
+  "riskLevel": "MEDIUM"
 }
 ```
 
-Customer risk level is one of:
+Risk level is one of:
 
 ```text
 LOW
 MEDIUM
 HIGH
+CRITICAL
 ```
 
-The customer's risk level contributes to the final transaction risk assessment.
+It is **server-assigned** — every customer starts at `LOW` and is re-rated as their
+transactions are assessed. A client cannot hand itself a rating, which is why
+`CreateCustomerRequest` has no field for it.
 
----
-
-# 2. Transaction Management
-
-Transactions represent financial activity between customers/accounts.
-
-Example:
+Each customer holds one or more accounts, mapped many-to-one with lazy fetching:
 
 ```json
 {
-  "transactionId": "TXN-93842",
-  "senderId": "CUST-1024",
-  "receiverId": "CUST-8841",
-  "amount": 485000,
+  "accountNumber": "ACC-9B41C7E20D5A",
+  "customerReference": "CUST-3F2A9C41",
+  "accountType": "SAVINGS",
   "currency": "INR",
-  "type": "TRANSFER",
-  "timestamp": "2026-08-11T14:32:00",
-  "destinationCountry": "IN"
+  "balance": 0.0000,
+  "status": "ACTIVE"
 }
 ```
 
-Supported transaction types may include:
-
-* TRANSFER
-* CASH_DEPOSIT
-* CASH_WITHDRAWAL
-* CARD_PAYMENT
-* INTERNATIONAL_TRANSFER
-
-Transactions can be:
-
-* Created through REST APIs
-* Generated through the synthetic data generator
-* Retrieved by ID
-* Searched and filtered
-* Associated with customers
-* Evaluated by the AML engine
+Accounts open at zero balance with `ACTIVE` status, both set by the server. Balances are
+`NUMERIC(19,4)` mapped to `BigDecimal`; floating point cannot represent `0.1` exactly, which
+would quietly corrupt every threshold comparison the rules engine makes.
 
 ---
 
-# 3. Synthetic Transaction Generator
+## 2. Transaction Management
 
-No real financial data is used.
+> 📋 Planned.
 
-The project includes a synthetic data generator capable of producing realistic transaction datasets.
+Transactions represent financial activity on a monitored account.
 
-The generator creates:
+```json
+{
+  "transactionReference": "TXN-93842A1C",
+  "accountNumber": "ACC-9B41C7E20D5A",
+  "transactionType": "TRANSFER",
+  "amount": 485000.0000,
+  "currency": "INR",
+  "counterpartyAccountNumber": "ACC-EXTERNAL-8841",
+  "counterpartyCountry": "IN",
+  "occurredAt": "2026-08-11T14:32:00Z"
+}
+```
 
-### Normal activity
+Transaction types:
+
+```text
+TRANSFER
+CASH_DEPOSIT
+CASH_WITHDRAWAL
+CARD_PAYMENT
+INTERNATIONAL_TRANSFER
+```
+
+Note that `occurredAt` is separate from the inherited `createdAt`. One is when the money
+moved, the other is when we learned about it, and they are not the same instant in any real
+institution. Every rule time window is measured on `occurredAt`.
+
+Transactions will be:
+
+* Created through the REST API or the synthetic generator
+* Retrieved by reference
+* Filtered by account, type, amount range, date range and risk level
+* Evaluated by the AML rules engine
+
+---
+
+## 3. Synthetic Transaction Generator
+
+> 📋 Planned.
+
+No real financial data is used anywhere in this project.
+
+A generator produces datasets containing both ordinary activity and the patterns the rules
+are meant to catch.
+
+Normal activity:
 
 ```text
 ₹2,000
@@ -154,9 +213,7 @@ The generator creates:
 ₹3,700
 ```
 
-### Suspicious patterns
-
-For example:
+A structuring pattern, within a short window:
 
 ```text
 ₹490,000
@@ -165,39 +222,32 @@ For example:
 ₹480,000
 ```
 
-within a short time window.
+Controllable inputs: customer count, transaction count, amount ranges, frequency, countries,
+customer risk mix, and which suspicious patterns to inject. This is what lets the whole
+monitoring workflow be demonstrated without an external data source.
 
-The generator can control:
+Intended entry point:
 
-* Number of customers
-* Number of transactions
-* Amount ranges
-* Transaction frequency
-* Countries
-* Customer risk levels
-* Suspicious transaction patterns
-
-This allows the system to be tested against both normal and suspicious workloads.
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--seed-data=true"
+```
 
 ---
 
-# 4. AML Rules Engine
+## 4. AML Rules Engine
 
-The AML Rules Engine is the core component of the application.
+> 📋 Planned. This is the core of the project.
 
-It evaluates transactions against a collection of independent rules.
+The engine evaluates a transaction against a collection of independent rules and combines
+their output into a single assessment.
 
-Each rule returns:
+Each rule reports:
 
 ```text
 Triggered / Not Triggered
-Risk Points
-Reason
+Risk points
+Human-readable reason
 ```
-
-The engine then combines the results into a final risk assessment.
-
-Example:
 
 ```text
 Transaction
@@ -210,53 +260,40 @@ Transaction
                                    90
 ```
 
----
-
-# 5. AML Rules
-
-## Large Transaction Rule
-
-Detects unusually large transactions.
-
-Example:
-
-```text
-IF transaction amount > configured threshold
-THEN add risk points
-```
-
-Example configuration:
-
-```text
-Threshold: ₹500,000
-Risk Points: +25
-```
-
-Thresholds should be configurable rather than hardcoded.
+The design constraint that matters: **a rule never touches a repository.** Each rule receives
+a context object holding the transaction, the customer, and a narrow history port. That keeps
+every rule unit-testable as plain JUnit with no Spring context and no database, and it means
+adding a sixth rule requires no change to the engine.
 
 ---
 
-## Transaction Velocity Rule
+## 5. AML Rules
 
-Detects unusually frequent transactions within a time window.
+> 📋 Planned. All thresholds below are configuration, not constants in code.
 
-Example:
+### Large Transaction Rule
 
 ```text
-IF customer performs > 10 transactions
-WITHIN 10 minutes
+IF amount > configured threshold
+THEN +25 risk points
+```
+
+Default threshold ₹500,000.
+
+### Transaction Velocity Rule
+
+```text
+IF the account has more than N transactions
+WITHIN a configured window
 THEN +20 risk points
 ```
 
-This can identify unusual transaction bursts.
+Catches bursts of activity that are individually unremarkable.
 
----
+### Structuring Detection
 
-## Structuring Detection
-
-Structuring refers to splitting transactions into smaller amounts to avoid triggering a larger transaction threshold.
-
-Example:
+Structuring is splitting one large transfer into several smaller ones to stay under a
+reporting threshold.
 
 ```text
 ₹490,000
@@ -265,124 +302,105 @@ Example:
 ₹495,000
 ```
 
-Instead of:
+instead of:
 
 ```text
 ₹1,955,000
 ```
 
-The system looks for:
-
-* Multiple transactions
-* Same customer
-* Similar amounts
-* Short time window
-* Combined amount significantly larger than individual transactions
-
-If the pattern matches the configured rule:
+The rule looks for several transactions on the same account, each individually *below* the
+large-amount threshold but above a floor, inside one time window, together summing to more
+than that threshold. Two transactions are not a pattern; the minimum count is configurable
+and defaults to three.
 
 ```text
 +30 risk points
 ```
 
----
+### Customer Risk Rule
 
-## Customer Risk Rule
-
-A customer's existing risk profile contributes to transaction risk.
-
-Example:
+The customer's standing rating feeds into every transaction they make.
 
 ```text
-LOW     → +0
-MEDIUM  → +10
-HIGH    → +20
+LOW      → +0
+MEDIUM   → +10
+HIGH     → +20
+CRITICAL → +30
 ```
 
----
-
-## Country Risk Rule
-
-The system supports a configurable list of countries requiring additional scrutiny.
-
-For demonstration purposes, this list is configurable and **does not represent an official regulatory classification**.
-
-Example:
+### Country Risk Rule
 
 ```text
-IF destination country exists
-IN configured elevated-risk list
-THEN +20
+IF the counterparty country is in the configured elevated-risk list
+THEN +20 risk points
 ```
+
+The list is configuration and is illustrative only. It is **not** an official regulatory
+classification, and nothing here should be read as a claim about any jurisdiction.
 
 ---
 
-# 6. Risk Scoring
+## 6. Risk Scoring
 
-Every evaluated transaction receives an explainable risk score.
+> 📋 Planned.
 
-Example:
+Points from every triggered rule are summed, then capped at 100 — the five rules can total
+125, and a score that runs off the end of its own scale is not a score.
 
 ```text
 Large transaction       +25
 Velocity anomaly        +20
-Customer risk           +15
+Customer risk           +20
 Country risk            +20
                          ---
-Total                    80
+Total                    85
 ```
 
-Risk levels:
+Bands, all configurable:
 
 ```text
-0 – 29    LOW
+ 0 – 29   LOW
 30 – 59   MEDIUM
 60 – 79   HIGH
-80+       CRITICAL
+80 +      CRITICAL
 ```
-
-The thresholds are configurable.
 
 ---
 
-# 7. Explainable Risk Assessment
+## 7. Explainable Risk Assessment
 
-The system does not simply return:
+> 📋 Planned.
 
-```text
-Risk = 80
-```
-
-It also explains why.
-
-Example:
+A score on its own is useless to an analyst who has to justify a decision. Every assessment
+carries the reasons that produced it.
 
 ```json
 {
-  "transactionId": "TXN-93842",
-  "score": 80,
+  "transactionReference": "TXN-93842A1C",
+  "score": 85,
   "level": "CRITICAL",
   "reasons": [
-    "Transaction exceeded configured amount threshold",
-    "High transaction velocity detected",
-    "Customer has elevated risk profile",
-    "Destination country requires additional scrutiny"
+    "Amount 485000.00 INR exceeded the 500000.00 threshold",
+    "12 transactions in the preceding 10 minutes exceeded the limit of 10",
+    "Customer risk rating is HIGH",
+    "Counterparty country requires additional scrutiny"
   ]
 }
 ```
 
-This makes the risk assessment transparent and easier for an analyst to investigate.
+Every rule result is persisted, including the ones that did not trigger. Knowing which rules
+looked and stayed quiet is what makes false-positive tuning possible later.
 
 ---
 
-# 8. Alert Management
+## 8. Alert Management
 
-Transactions reaching a configured risk threshold generate alerts.
+> 📋 Planned.
 
-Example:
+An assessment at or above the configured alert threshold raises an alert.
 
 ```text
-Risk Score >= 60
+Risk score >= 60
         │
         ▼
      ALERT
@@ -390,11 +408,10 @@ Risk Score >= 60
         ├── Transaction details
         ├── Risk score
         ├── Triggered rules
-        ├── Explanation
         └── Customer information
 ```
 
-Alerts have statuses:
+Alert statuses:
 
 ```text
 OPEN
@@ -404,26 +421,19 @@ RESOLVED
 FALSE_POSITIVE
 ```
 
+Transitions are validated rather than free-form: an alert cannot jump from `OPEN` straight to
+`RESOLVED`, and nothing moves out of a terminal state. An illegal transition is a `409`, not a
+silent write.
+
 ---
 
-# 9. Investigation Case Management
+## 9. Investigation Case Management
 
-An alert can be converted into an investigation case.
+> 📋 Planned.
 
-An analyst can:
-
-* View transaction details
-* View customer information
-* Review previous transactions
-* View triggered AML rules
-* Review risk score
-* Add investigation notes
-* Assign the case
-* Change case status
-* Mark the alert as a false positive
-* Resolve the investigation
-
-Example workflow:
+An alert can be promoted to an investigation case, where an analyst can review the
+transaction and customer, read previous activity and triggered rules, add notes, reassign,
+change status, and either resolve it or mark it a false positive.
 
 ```text
 Alert
@@ -442,70 +452,70 @@ Resolved      False Positive
 
 ---
 
-# 10. Transaction History & Search
+## 10. Transaction History and Search
 
-The system supports querying historical transactions.
+> 🚧 Paging and filtering exist for customers; transaction search is planned.
 
-Possible filters:
-
-* Customer
-* Transaction type
-* Amount range
-* Date range
-* Risk level
-* Country
-* Alert status
-
-Pagination is used for large result sets.
-
-Example:
+Collections are always paginated. An unbounded `findAll` over a transaction-scale table is
+how an API takes down its own database.
 
 ```text
-GET /api/v1/transactions?page=0&size=20
+GET /api/v1/customers?page=0&size=20&sort=lastName,asc
+GET /api/v1/customers?riskLevel=HIGH
 ```
+
+Planned transaction filters: account, type, amount range, date range, risk level, country,
+alert status.
 
 ---
 
-# 11. REST API
+## 11. REST API
 
-The backend exposes RESTful APIs for interacting with the system.
-
-Example endpoints:
+> 🚧 Customer endpoints live. The rest arrive with their features.
 
 ```text
-POST   /api/v1/transactions
-GET    /api/v1/transactions/{id}
-GET    /api/v1/transactions
-POST   /api/v1/transactions/{id}/evaluate
+✅  GET    /api/v1/customers
+✅  GET    /api/v1/customers/{customerReference}
+✅  POST   /api/v1/customers
 
-GET    /api/v1/customers/{id}
-GET    /api/v1/customers/{id}/transactions
+🚧  POST   /api/v1/customers/{customerReference}/accounts
+🚧  GET    /api/v1/customers/{customerReference}/accounts
+🚧  GET    /api/v1/accounts/{accountNumber}
 
-GET    /api/v1/alerts
-GET    /api/v1/alerts/{id}
-PATCH  /api/v1/alerts/{id}/status
+📋  POST   /api/v1/transactions
+📋  GET    /api/v1/transactions
+📋  GET    /api/v1/transactions/{transactionReference}
+📋  POST   /api/v1/transactions/{transactionReference}/evaluate
+📋  GET    /api/v1/transactions/{transactionReference}/assessment
 
-GET    /api/v1/cases
-POST   /api/v1/cases
-PATCH  /api/v1/cases/{id}
+📋  GET    /api/v1/alerts
+📋  GET    /api/v1/alerts/{alertReference}
+📋  PATCH  /api/v1/alerts/{alertReference}/status
+
+📋  GET    /api/v1/cases
+📋  POST   /api/v1/cases
+📋  PATCH  /api/v1/cases/{caseReference}
 ```
 
-The API will use:
+Conventions in place:
 
-* JSON request/response bodies
-* HTTP status codes
-* Request validation
-* Centralized exception handling
-* Pagination
-* Filtering
+* JSON request and response bodies, versioned under `/api/v1`
+* Bean Validation on every request DTO
+* Errors as RFC 9457 `application/problem+json`, from one `@RestControllerAdvice`
+* `201 Created` with a `Location` header on creation
+* Paging and sorting resolved straight from query parameters
 
 ---
 
-# 12. Authentication & Authorization
+## 12. Authentication and Authorization
 
-The application supports authenticated users.
+> 📋 Planned. **The API is currently unauthenticated.**
 
-Potential roles:
+`SecurityConfig` exists and deliberately permits `/api/**`, because there is no `User` entity
+yet and requiring authentication with no way to authenticate would leave the service
+unusable. Anything not explicitly listed already defaults to denied.
+
+Planned roles:
 
 ```text
 ADMIN
@@ -513,26 +523,27 @@ ANALYST
 VIEWER
 ```
 
-Example permissions:
-
 | Operation            | ADMIN | ANALYST | VIEWER |
 |----------------------|------:|--------:|-------:|
 | View transactions    |     ✓ |       ✓ |      ✓ |
-| Evaluate transaction |     ✓ |       ✓ |      ✓ |
+| Evaluate transaction |     ✓ |       ✓ |      ✗ |
 | Manage alerts        |     ✓ |       ✓ |   Read |
 | Manage cases         |     ✓ |       ✓ |   Read |
 | Configure rules      |     ✓ |       ✗ |      ✗ |
 | Manage users         |     ✓ |       ✗ |      ✗ |
 
-Authentication can be implemented using Spring Security and JWT.
+Intended implementation: Spring Security with JWT bearer tokens and method-level
+authorization.
 
 ---
 
-# 13. Database Design
+## 13. Database Design
 
-PostgreSQL is used as the primary relational database.
+> 🚧 `customers` and `accounts` exist. The rest follow their features.
 
-Core entities:
+PostgreSQL is the primary store. Flyway owns the schema; Hibernate runs with
+`ddl-auto=validate`, so a mapping that disagrees with the migrations fails at startup rather
+than drifting silently.
 
 ```text
 Customer
@@ -545,6 +556,8 @@ Account        Transaction
                     ▼
               RiskAssessment
                     │
+                    ├── RiskRuleResult
+                    │
                     ▼
                   Alert
                     │
@@ -552,45 +565,30 @@ Account        Transaction
                    Case
 ```
 
-Potential tables:
+| Table | Migration |
+|---|---|
+| `customers` | ✅ V1 |
+| `accounts` | ✅ V2 |
+| `transactions` | 📋 V3 |
+| `risk_assessments`, `risk_rule_results` | 📋 V4 |
+| `alerts` | 📋 V5 |
+| `investigation_cases`, `case_notes`, `users` | 📋 later |
 
-```text
-customers
-accounts
-transactions
-risk_assessments
-risk_rule_results
-alerts
-investigation_cases
-case_notes
-users
-aml_rules
-```
+Migrations are immutable once applied — Flyway checksums them, so a schema change means a new
+`V<n>`, never an edit to an old file.
 
-Hibernate/JPA is used for ORM and entity persistence.
-
-Database indexes will be added for frequently queried fields such as:
-
-* customer ID
-* transaction timestamp
-* transaction amount
-* alert status
-* risk level
+Indexes are added for the access patterns that actually exist, not speculatively. The
+composite index on `(account_id, occurred_at)` matters most: it is what the velocity and
+structuring lookbacks depend on.
 
 ---
 
-# 14. Redis Caching
+## 14. Redis Caching
 
-Redis is used for frequently accessed data.
+> 📋 Planned.
 
-Potential cached data:
-
-* Customer risk profiles
-* Rule configuration
-* Frequently requested transaction summaries
-* Dashboard metrics
-
-Example:
+Candidates for caching once there is measurable load: customer risk profiles, rule
+configuration, and dashboard aggregates.
 
 ```text
 Request
@@ -601,20 +599,26 @@ Redis
    │
    └── Cache miss
            ↓
-       PostgresSQL
+       PostgreSQL
            ↓
        Update cache
 ```
 
-Cache expiration policies will prevent stale data from persisting indefinitely.
+Rule configuration is the interesting one, because a cached threshold that outlives a
+configuration change silently scores transactions against the wrong number. Any cache here
+needs an explicit expiry and invalidation story, not just a TTL.
 
 ---
 
-# 15. Event-Driven Processing
+## 15. Event-Driven Processing
 
-For larger workloads, transaction processing can be decoupled using a message broker such as Kafka or RabbitMQ.
+> 📋 Planned, and genuinely optional.
 
-Example:
+Evaluation is synchronous today: ingesting a transaction scores it in the same request. That
+is the right starting point — it is simpler, and it makes the whole pipeline observable in a
+single `curl`.
+
+At higher volume, ingestion and scoring want to scale separately:
 
 ```text
 Transaction API
@@ -636,131 +640,105 @@ Risk Assessment
       └── Suspicious → Alert Service
 ```
 
-This allows transaction ingestion and risk processing to scale independently.
-
-> Event-driven processing is an optional advanced component and will only be included in the final implementation if completed.
+This will only appear in the repository if it is actually finished, not as a stub.
 
 ---
 
-# 16. Testing
+## 16. Testing
 
-Unit and integration tests will cover critical business logic.
-
-Important test areas:
-
-* Transaction validation
-* Risk scoring
-* Individual AML rules
-* Structuring detection
-* Velocity detection
-* Customer risk calculation
-* Alert generation
-* Repository operations
-* REST endpoints
-
-Example:
+> 🚧 Three layers in place for customers. Every new feature ships with its own tests.
 
 ```text
-Transaction
-     ↓
-AML Rule
-     ↓
-Expected Risk Points
-     ↓
-JUnit Assertion
+Unit          plain JUnit + Mockito, no Spring context
+Slice         @DataJpaTest / @WebMvcTest
+Integration   @SpringBootTest against Testcontainers PostgreSQL
 ```
+
+Repository and integration tests run against a real PostgreSQL 17 container, the same major
+version as the compose stacks, rather than an embedded database that would accept SQL
+Postgres rejects.
+
+Priority test areas as features land:
+
+* Individual AML rules, especially threshold and time-window boundaries
+* Structuring and velocity detection
+* Score aggregation and band boundaries
+* Alert generation and status transitions
+* Request validation and error responses
 
 ---
 
-# 17. Docker
+## 17. Docker
 
-The application is containerized using Docker.
+> ✅ Built.
 
-Development environment:
+Two stacks, for two different jobs.
 
-```text
-┌──────────────────────────────┐
-│ Docker Compose               │
-│                              │
-│ Spring Boot API              │
-│ PostgresSQL                   │
-│ Redis                        │
-│ Message Broker (optional)    │
-└──────────────────────────────┘
-```
-
-This allows the entire backend environment to be started consistently.
-
-Example:
+**Development** — Postgres only. The application is deliberately *not* containerised, so it
+runs from your IDE with hot reload and a debugger attached.
 
 ```bash
+cd docker/development
 docker compose up -d
 ```
 
----
+**Production** — application plus Postgres, with the database unpublished and reachable only
+over the internal network, a multi-stage build, a non-root container user, and a healthcheck
+against `/actuator/health`.
 
-# 18. Technology Stack
-
-### Backend
-
-* Java 17
-* Spring Boot
-* Spring Security
-* Spring Data JPA
-* Hibernate
-* Maven
-
-### Database
-
-* PostgreSQL
-* Redis
-
-### Messaging
-
-* Kafka / RabbitMQ
-
-### Testing
-
-* JUnit
-* Mockito
-* Spring Boot Test
-
-### DevOps
-
-* Docker
-* Docker Compose
-* Kubernetes
-* CI/CD
-
-### API
-
-* REST
-* JSON
-* OpenAPI / Swagger
+```bash
+cd docker/production
+cp .env.example .env    # fill in POSTGRES_PASSWORD
+docker compose up -d --build
+```
 
 ---
 
-# 19. Project Architecture
+## 18. Technology Stack
 
-The application follows a layered architecture:
+### Built
+
+| | |
+|---|---|
+| Language | Java 17 |
+| Framework | Spring Boot 4.1 — Web MVC, Data JPA, Validation, Security, Actuator |
+| Persistence | PostgreSQL 17, Hibernate, Flyway |
+| Testing | JUnit 5, Mockito, AssertJ, Spring Boot Test, Testcontainers |
+| Build | Maven |
+| Runtime | Docker, Docker Compose |
+
+### Planned
+
+| | |
+|---|---|
+| Caching | Redis |
+| Messaging | Kafka or RabbitMQ |
+| Auth | Spring Security JWT |
+| API docs | OpenAPI / Swagger UI |
+| Deployment | Kubernetes |
+| CI | GitHub Actions |
+
+---
+
+## 19. Project Architecture
 
 ```text
-Controller
+Controller      HTTP only — no business logic, no repositories
     │
     ▼
-Service
+Service         business rules, transaction boundaries
     │
     ▼
-Domain / Rules
+Domain / Rules  pure logic, no framework
     │
     ▼
-Repository
+Repository      Spring Data interfaces
     │
     ▼
 Database
 ```
 
-Example:
+Where the rules engine will sit:
 
 ```text
 TransactionController
@@ -773,7 +751,7 @@ TransactionService
         └── RiskAssessmentService
                     │
                     ▼
-              AMLRulesEngine
+              AmlRulesEngine
                     │
           ┌─────────┼─────────┐
           ▼         ▼         ▼
@@ -781,250 +759,153 @@ TransactionService
         Rule       Rule        Rule
 ```
 
-The rules engine is designed around independent rules so that new rules can be added without modifying the core evaluation workflow.
+Rules are discovered by injecting `List<AmlRule>`, so the engine never names them
+individually and a new rule is a new class plus its tests — nothing else.
 
 ---
 
-# 20. Design Principles
+## 20. Design Principles
 
-The project emphasizes:
-
-* SOLID principles
-* Separation of concerns
-* Dependency injection
-* Interface-driven design
-* Strategy pattern for AML rules
-* Layered architecture
-* Centralized exception handling
-* Input validation
-* Configurable business rules
-* Explainable risk assessment
-* Testable business logic
+* Entities are database rows; DTOs are the API contract. The two never mix, and the request
+  DTO doubles as the write allowlist
+* Constructor injection with `final` fields — no field `@Autowired`
+* Business logic in services, not controllers; pure logic in the domain, not services
+* Strategy pattern for AML rules, so the engine is closed to modification
+* Centralised exception handling, so controllers contain no `try`/`catch`
+* Business rules configurable, not hardcoded
+* Every risk decision explainable
+* `BigDecimal` for money, compared with `compareTo`
+* No interface until there is a second implementation
 
 ---
 
-# 21. Example End-to-End Flow
+## 21. Assumptions and Limitations
 
-A suspicious transaction enters the system:
+Worth stating plainly, because each of these is a real simplification:
 
-```text
-₹490,000
-Customer: CUST-1024
-Destination: Example Country
-```
-
-The system performs:
-
-```text
-1. Validate transaction
-          ↓
-2. Persist transaction
-          ↓
-3. Retrieve customer profile
-          ↓
-4. Execute AML rules
-          ↓
-5. Large Amount Rule
-          → +25
-          ↓
-6. Velocity Rule
-          → +20
-          ↓
-7. Structuring Rule
-          → +30
-          ↓
-8. Customer Risk Rule
-          → +15
-          ↓
-9. Calculate score
-          → 90
-          ↓
-10. Risk level
-          → CRITICAL
-          ↓
-11. Generate alert
-          ↓
-12. Create investigation case
-```
-
-The analyst can then review the case and investigate the underlying activity.
+* **Single currency for thresholds.** Rule thresholds are compared directly against the
+  transaction amount, with no FX normalisation. A real system converts to a base currency
+  first, using the rate at the transaction date.
+* **Synchronous evaluation.** Ingestion scores the transaction in-request. Fine at
+  demonstration volume, wrong at production volume — see section 15.
+* **Point-based scoring, not statistical.** Fixed weights chosen by hand. Real monitoring
+  tunes thresholds against historical alert outcomes, and increasingly supplements rules with
+  behavioural baselining.
+* **Customer risk is not yet dynamic.** The rating exists and is read by the rules, but
+  nothing writes it back after an assessment.
+* **No authentication.** See section 12.
+* **Elevated-risk countries are configuration, not a regulatory list.**
+* **Synthetic data only**, generated locally.
 
 ---
 
-# 22. Getting Started
+## 22. Getting Started
 
-## Prerequisites
+### Prerequisites
 
-Install:
-
-* Java 17+
-* Maven
-* Docker
-* Docker Compose
-* PostgreSQL (optional when using Docker)
-* Redis (optional when using Docker)
-
-Verify:
+* Java 17 or later
+* Docker and Docker Compose
+* Maven (or just use the bundled `./mvnw`)
 
 ```bash
 java -version
-mvn -version
-docker --version
 docker compose version
 ```
 
----
-
-## Clone
+### Clone
 
 ```bash
 git clone https://github.com/<username>/financial-crime-monitoring.git
-
 cd financial-crime-monitoring
 ```
 
----
-
-## Configuration
-
-Create an environment configuration:
-
-```text
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=financial_crime
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-
-REDIS_HOST=localhost
-REDIS_PORT=6379
-```
-
-Never commit production credentials.
-
----
-
-## Start Infrastructure
+### Start the database
 
 ```bash
-docker compose up -d postgres redis
+cd docker/development
+docker compose up -d
+cd ../..
 ```
 
----
+Defaults are database `fcm`, user `fcm`, password `fcm` on port 5432, matching
+`src/main/resources/application.properties`. To change any of them, copy
+`docker/development/.env.example` to `.env` and edit it. `.env` files are gitignored — never
+commit credentials.
 
-## Run Application
+### Run
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Or:
+Flyway applies the migrations on startup. Health check:
 
 ```bash
-mvn spring-boot:run
+curl -s http://localhost:8080/actuator/health
 ```
 
----
-
-## Run Tests
+### Try it
 
 ```bash
-./mvnw test
+curl -i -X POST http://localhost:8080/api/v1/customers \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "firstName": "Asha",
+        "lastName": "Menon",
+        "email": "asha.menon@example.com",
+        "dateOfBirth": "1990-05-17",
+        "countryCode": "IN"
+      }'
+
+curl -s 'http://localhost:8080/api/v1/customers?size=5'
 ```
 
----
-
-## Build
+### Tests
 
 ```bash
+./mvnw test          # Docker must be running — Testcontainers needs it
 ./mvnw clean package
 ```
 
 ---
 
-# 23. Synthetic Data Generation
+## 23. API Documentation
 
-The application can generate demonstration data.
+> 📋 Planned.
 
-Example:
-
-```bash
-./mvnw spring-boot:run \
-  -Dspring-boot.run.arguments="--seed-data=true"
-```
-
-The generator creates:
-
-* Customers
-* Accounts
-* Normal transactions
-* High-value transactions
-* High-velocity transactions
-* Structuring scenarios
-* Different customer risk profiles
-
-This allows the complete monitoring workflow to be demonstrated without external data sources.
+OpenAPI generation with a Swagger UI at `/swagger-ui.html`. Until then, section 11 is the
+endpoint reference and the request DTOs are the schema.
 
 ---
 
-# 24. API Documentation
+## 24. Roadmap
 
-Once the application is running, API documentation will be available through Swagger/OpenAPI.
+Next, in order:
 
-Example:
+1. Account REST endpoints and tests
+2. Transaction ingestion
+3. The AML rules engine and the five rules
+4. Risk scoring and explainable assessments
+5. Alerts with a validated status workflow
 
-```text
-http://localhost:8080/swagger-ui.html
-```
+Later, in rough priority order:
 
-The API documentation provides:
-
-* Available endpoints
-* Request schemas
-* Response schemas
-* Authentication requirements
-* Example requests
-
----
-
-# 25. Future Improvements
-
-Potential future extensions:
-
-* ML-based anomaly detection
-* Real-time transaction streaming
-* Advanced graph-based transaction analysis
-* Customer behavioral profiles
-* Distributed transaction processing
-* Kubernetes deployment
-* Cloud deployment on AWS
-* CI/CD using Jenkins/GitHub Actions
-* OpenTelemetry observability
-* Prometheus/Grafana monitoring
-* Advanced case-management workflows
+* Investigation cases with notes and assignment
+* Synthetic data generator
+* OpenAPI documentation
+* JWT authentication and role-based authorization
+* Redis caching for rule configuration and risk profiles
+* Kafka-based asynchronous ingestion
+* GitHub Actions CI
+* Customer behavioural profiles and dynamic re-rating
+* Graph analysis of counterparty networks
+* Prometheus and Grafana metrics
 
 ---
 
 ## Project Goal
 
-The goal of this project is to demonstrate how a modern backend system can combine:
-
-```text
-Java
-+
-Spring Boot
-+
-Relational Databases
-+
-Caching
-+
-Event-Driven Processing
-+
-Containerization
-+
-Business Rules
-+
-Risk Scoring
-```
-
-to build a scalable and explainable financial-crime monitoring platform using entirely synthetic data.
+To build something that demonstrates how the pieces of a real backend fit together — layered
+architecture, a relational schema under migration control, configurable business rules, an
+explainable decision, and the tests that keep all of it honest — on a domain where getting it
+wrong actually matters.
