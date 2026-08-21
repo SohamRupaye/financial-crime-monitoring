@@ -22,7 +22,7 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | Capability | Status | Notes |
 |---|---|---|
 | Customer management | ✅ Built | Create, fetch, list with paging and risk-level filter |
-| Account management | 🚧 In progress | Entity, repository and service done; REST endpoints pending |
+| Account management | ✅ Built | Open an account, fetch by number, list per customer |
 | Transaction ingestion | 📋 Planned | Section 2 |
 | AML rules engine | 📋 Planned | Sections 4–5 — the core of the project |
 | Risk scoring | 📋 Planned | Section 6 |
@@ -30,9 +30,9 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | Alerts | 📋 Planned | Section 8 |
 | Investigation cases | 📋 Planned | Section 9 |
 | Synthetic data generator | 📋 Planned | Section 3 |
-| REST API | 🚧 In progress | Customers only so far |
+| REST API | 🚧 In progress | Customers and accounts so far |
 | Schema and migrations | 🚧 In progress | Flyway V1–V2: `customers`, `accounts` |
-| Testing | 🚧 In progress | Three-layer suite for customers; none yet for accounts |
+| Testing | 🚧 In progress | Three-layer suite for customers and accounts |
 | Docker | ✅ Built | Dev and production compose stacks |
 | Authentication | 📋 Planned | Section 12 — **the API is currently open** |
 | Redis caching | 📋 Planned | Section 14 |
@@ -99,7 +99,7 @@ everything downstream of it is the work in progress.
 
 ## 1. Customer and Account Management
 
-> ✅ Customers built. 🚧 Accounts: service layer built, endpoints pending.
+> ✅ Built.
 
 Customer profiles are the reference data the rules engine reads when scoring a transaction.
 
@@ -471,16 +471,16 @@ alert status.
 
 ## 11. REST API
 
-> 🚧 Customer endpoints live. The rest arrive with their features.
+> 🚧 Customer and account endpoints live. The rest arrive with their features.
 
 ```text
 ✅  GET    /api/v1/customers
 ✅  GET    /api/v1/customers/{customerReference}
 ✅  POST   /api/v1/customers
 
-🚧  POST   /api/v1/customers/{customerReference}/accounts
-🚧  GET    /api/v1/customers/{customerReference}/accounts
-🚧  GET    /api/v1/accounts/{accountNumber}
+✅  POST   /api/v1/customers/{customerReference}/accounts
+✅  GET    /api/v1/customers/{customerReference}/accounts
+✅  GET    /api/v1/accounts/{accountNumber}
 
 📋  POST   /api/v1/transactions
 📋  GET    /api/v1/transactions
@@ -646,7 +646,8 @@ This will only appear in the repository if it is actually finished, not as a stu
 
 ## 16. Testing
 
-> 🚧 Three layers in place for customers. Every new feature ships with its own tests.
+> 🚧 Three layers in place for customers and accounts. Every new feature ships with its own
+> tests.
 
 ```text
 Unit          plain JUnit + Mockito, no Spring context
@@ -882,11 +883,10 @@ endpoint reference and the request DTOs are the schema.
 
 Next, in order:
 
-1. Account REST endpoints and tests
-2. Transaction ingestion
-3. The AML rules engine and the five rules
-4. Risk scoring and explainable assessments
-5. Alerts with a validated status workflow
+1. Transaction ingestion
+2. The AML rules engine and the five rules
+3. Risk scoring and explainable assessments
+4. Alerts with a validated status workflow
 
 Later, in rough priority order:
 
