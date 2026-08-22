@@ -142,4 +142,28 @@ class AccountControllerTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$[0].accountNumber").value(ACCOUNT_NUMBER));
     }
+    @Test
+    @DisplayName("POST with an unknown account type returns 400 listing the valid ones")
+    void openRejectsUnknownAccountType() throws Exception {
+        // Jackson cannot build the record at all here, so this never reaches
+        // validation - it surfaces as an unreadable body and used to be a 500.
+        mockMvc.perform(post("/api/v1/customers/{ref}/accounts", CUSTOMER_REFERENCE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountType\":\"GOLD\",\"currency\":\"INR\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Malformed request"))
+                .andExpect(jsonPath("$.detail").value(
+                        "'GOLD' is not a valid AccountType. Allowed values: [SAVINGS, CURRENT, BUSINESS]"));
+    }
+
+    @Test
+    @DisplayName("POST with broken JSON returns 400 without leaking parser internals")
+    void openRejectsMalformedJson() throws Exception {
+        mockMvc.perform(post("/api/v1/customers/{ref}/accounts", CUSTOMER_REFERENCE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountType\": "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                        "Request body is not valid JSON, or a field has the wrong type"));
+    }
 }
