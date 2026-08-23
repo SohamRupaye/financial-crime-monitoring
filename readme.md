@@ -569,7 +569,7 @@ Account        Transaction
 |---|---|
 | `customers` | ✅ V1 |
 | `accounts` | ✅ V2 |
-| `transactions` | 📋 V3 |
+| `transactions` | ✅ V3 |
 | `risk_assessments`, `risk_rule_results` | 📋 V4 |
 | `alerts` | 📋 V5 |
 | `investigation_cases`, `case_notes`, `users` | 📋 later |
