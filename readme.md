@@ -23,7 +23,7 @@ state of the code — everything marked *Planned* is designed but not yet writte
 |---|---|---|
 | Customer management | ✅ Built | Create, fetch, list with paging and risk-level filter |
 | Account management | ✅ Built | Open an account, fetch by number, list per customer |
-| Transaction ingestion | 📋 Planned | Section 2 |
+| Transaction ingestion | ✅ Built | Ingest, fetch, paged search with optional filters |
 | AML rules engine | 📋 Planned | Sections 4–5 — the core of the project |
 | Risk scoring | 📋 Planned | Section 6 |
 | Explainable assessments | 📋 Planned | Section 7 |
@@ -155,7 +155,7 @@ would quietly corrupt every threshold comparison the rules engine makes.
 
 ## 2. Transaction Management
 
-> 📋 Planned.
+> ✅ Built. Scoring on ingest arrives with the rules engine.
 
 Transactions represent financial activity on a monitored account.
 
@@ -186,12 +186,21 @@ Note that `occurredAt` is separate from the inherited `createdAt`. One is when t
 moved, the other is when we learned about it, and they are not the same instant in any real
 institution. Every rule time window is measured on `occurredAt`.
 
-Transactions will be:
+Ingestion records that money moved somewhere else, so it does not touch balances. Two rules
+need the account rather than the request, and so return `422` rather than `400`:
 
-* Created through the REST API or the synthetic generator
+* The currency must match the account's. Without FX conversion, comparing a USD amount to an
+  INR threshold is not imprecise — it is meaningless.
+* A `CLOSED` account cannot receive postings. A `FROZEN` one deliberately can: an attempted
+  movement on a frozen account is exactly what a monitoring system exists to see, so
+  refusing to record it would throw the signal away.
+
+Transactions can be:
+
+* Ingested through the REST API — the synthetic generator is still planned
 * Retrieved by reference
-* Filtered by account, type, amount range, date range and risk level
-* Evaluated by the AML rules engine
+* Searched by account, type, minimum amount and date range, paginated
+* Evaluated by the AML rules engine — planned, section 4
 
 ---
 
@@ -454,7 +463,8 @@ Resolved      False Positive
 
 ## 10. Transaction History and Search
 
-> 🚧 Paging and filtering exist for customers; transaction search is planned.
+> 🚧 Customer and transaction search are in. Risk-level and alert-status filters follow their
+> features.
 
 Collections are always paginated. An unbounded `findAll` over a transaction-scale table is
 how an API takes down its own database.
@@ -462,10 +472,21 @@ how an API takes down its own database.
 ```text
 GET /api/v1/customers?page=0&size=20&sort=lastName,asc
 GET /api/v1/customers?riskLevel=HIGH
+
+GET /api/v1/transactions?accountNumber=ACC-9B41C7E20D5A&size=20
+GET /api/v1/transactions?transactionType=CASH_DEPOSIT&minAmount=500000
+GET /api/v1/transactions?from=2026-09-01T00:00:00Z&until=2026-09-02T00:00:00Z
 ```
 
-Planned transaction filters: account, type, amount range, date range, risk level, country,
-alert status.
+Transaction filters are built with the Criteria API rather than one query per combination, so
+the generated SQL carries only the predicates the caller actually supplied. The tempting
+shortcut — a single JPQL query guarded with `(:param IS NULL OR column = :param)` — does not
+survive PostgreSQL: a parameter used only in `? IS NULL` has no type to infer, and the driver
+rejects the statement.
+
+Date ranges are half-open, `[from, until)`, matching the rule windows.
+
+Still to come: filtering by risk level, country and alert status.
 
 ---
 
@@ -482,9 +503,9 @@ alert status.
 ✅  GET    /api/v1/customers/{customerReference}/accounts
 ✅  GET    /api/v1/accounts/{accountNumber}
 
-📋  POST   /api/v1/transactions
-📋  GET    /api/v1/transactions
-📋  GET    /api/v1/transactions/{transactionReference}
+✅  POST   /api/v1/transactions
+✅  GET    /api/v1/transactions
+✅  GET    /api/v1/transactions/{transactionReference}
 📋  POST   /api/v1/transactions/{transactionReference}/evaluate
 📋  GET    /api/v1/transactions/{transactionReference}/assessment
 
@@ -883,10 +904,9 @@ endpoint reference and the request DTOs are the schema.
 
 Next, in order:
 
-1. Transaction ingestion
-2. The AML rules engine and the five rules
-3. Risk scoring and explainable assessments
-4. Alerts with a validated status workflow
+1. The AML rules engine and the five rules
+2. Risk scoring and explainable assessments
+3. Alerts with a validated status workflow
 
 Later, in rough priority order:
 

@@ -53,6 +53,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 422 rather than 400: the request was syntactically fine and every field
+     * passed validation, so the problem is not with the request's form but with
+     * what it asks for.
+     */
+    @ExceptionHandler(BusinessRuleViolationException.class)
+    ProblemDetail handleBusinessRuleViolation(BusinessRuleViolationException exception) {
+        log.debug("Business rule violation: {}", exception.getMessage());
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+        problem.setTitle("Request cannot be processed");
+        return problem;
+    }
+
+    /**
      * Raised by Spring when an argument annotated {@code @Valid} fails its
      * constraints. The per-field messages are collected so a client can show them
      * next to the offending inputs instead of guessing from one flat string.
