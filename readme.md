@@ -344,8 +344,12 @@ IF the counterparty country is in the configured elevated-risk list
 THEN +20 risk points
 ```
 
-The list is configuration and is illustrative only. It is **not** an official regulatory
-classification, and nothing here should be read as a claim about any jurisdiction.
+The shipped list is **placeholder data**, and deliberately impossible to mistake for a real
+one: every code in it comes from the ranges ISO 3166-1 reserves for private use — `AA`,
+`QM`–`QZ`, `XA`–`XZ`, `ZZ` — which are guaranteed never to be assigned to an actual country.
+A demo project has no business shipping a list of real jurisdictions and implying it is a
+regulatory classification. A real deployment loads its own list, from whatever its compliance
+function publishes.
 
 ---
 
