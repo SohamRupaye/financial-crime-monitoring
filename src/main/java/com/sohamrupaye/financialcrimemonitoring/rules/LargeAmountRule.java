@@ -14,9 +14,11 @@ import java.math.BigDecimal;
 @Component
 public class LargeAmountRule implements AmlRule {
 
-    static final BigDecimal THRESHOLD = new BigDecimal("500000");
+    private final AmlProperties.LargeAmount config;
 
-    private static final int POINTS = 25;
+    public LargeAmountRule(AmlProperties properties) {
+        this.config = properties.largeAmount();
+    }
 
     @Override
     public RuleCode code() {
@@ -31,14 +33,14 @@ public class LargeAmountRule implements AmlRule {
         // different objects. Strictly greater, so an amount sitting exactly on the
         // threshold does not fire - the threshold is the line, and this rule is
         // about crossing it.
-        if (amount.compareTo(THRESHOLD) <= 0) {
+        if (amount.compareTo(config.threshold()) <= 0) {
             return RuleResult.notTriggered(code());
         }
 
-        return RuleResult.triggered(code(), POINTS,
+        return RuleResult.triggered(code(), config.points(),
                 "Amount %s %s exceeded the %s threshold".formatted(
                         amount.toPlainString(),
                         context.transaction().getCurrency(),
-                        THRESHOLD.toPlainString()));
+                        config.threshold().toPlainString()));
     }
 }

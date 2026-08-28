@@ -3,6 +3,11 @@ package com.sohamrupaye.financialcrimemonitoring.rules;
 import com.sohamrupaye.financialcrimemonitoring.model.enums.RiskLevel;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Carries the customer's standing rating into the transaction's score.
  *
@@ -13,6 +18,29 @@ import org.springframework.stereotype.Component;
 @Component
 public class CustomerRiskRule implements AmlRule {
 
+    private final Map<RiskLevel, Integer> pointsByRiskLevel;
+
+    /**
+     * A configured map costs the exhaustive {@code switch} this used to be, which
+     * made a new {@link RiskLevel} a compile error. A missing key would now be a
+     * silent zero instead, so the check moves to startup: the map has to cover
+     * every level or the application does not come up.
+     */
+    public CustomerRiskRule(AmlProperties properties) {
+        Map<RiskLevel, Integer> configured = new EnumMap<>(properties.customerRisk().points());
+
+        List<RiskLevel> missing = Arrays.stream(RiskLevel.values())
+                .filter(level -> !configured.containsKey(level))
+                .toList();
+
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException(
+                    "aml.customer-risk.points is missing an entry for " + missing);
+        }
+
+        this.pointsByRiskLevel = Map.copyOf(configured);
+    }
+
     @Override
     public RuleCode code() {
         return RuleCode.CUSTOMER_RISK;
@@ -21,16 +49,7 @@ public class CustomerRiskRule implements AmlRule {
     @Override
     public RuleResult evaluate(RuleContext context) {
         RiskLevel riskLevel = context.customer().getRiskLevel();
-
-        // No default branch on purpose. An exhaustive switch over the enum means
-        // adding a risk level becomes a compile error here rather than silently
-        // scoring zero.
-        int points = switch (riskLevel) {
-            case LOW -> 0;
-            case MEDIUM -> 10;
-            case HIGH -> 20;
-            case CRITICAL -> 30;
-        };
+        int points = pointsByRiskLevel.get(riskLevel);
 
         if (points == 0) {
             return RuleResult.notTriggered(code());

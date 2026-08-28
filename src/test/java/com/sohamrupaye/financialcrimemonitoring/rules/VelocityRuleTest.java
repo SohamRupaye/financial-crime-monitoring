@@ -14,12 +14,13 @@ import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.accoun
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.context;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.customer;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.historyOf;
+import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.properties;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.transaction;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class VelocityRuleTest {
 
-    private final VelocityRule rule = new VelocityRule();
+    private final VelocityRule rule = new VelocityRule(properties());
 
     private final Customer customer = customer(RiskLevel.LOW);
     private final Account account = account(customer);

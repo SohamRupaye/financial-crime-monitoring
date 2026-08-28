@@ -4,7 +4,6 @@ import com.sohamrupaye.financialcrimemonitoring.model.Transaction;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.List;
 
 /**
@@ -19,11 +18,11 @@ import java.util.List;
  * different kind of false positive:
  *
  * <ul>
- *   <li>every transaction sits between {@link #NEAR_THRESHOLD_FLOOR} and the
+ *   <li>every transaction sits between the near-threshold floor and the
  *       large-amount threshold — otherwise a week of grocery payments adds up and
  *       looks like structuring;</li>
- *   <li>there are at least {@link #MIN_TRANSACTIONS} of them — two large
- *       transfers on one day is ordinary business;</li>
+ *   <li>there are at least {@code minTransactions} of them — two large transfers
+ *       on one day is ordinary business;</li>
  *   <li>the total clears the threshold that was being avoided — if the sum would
  *       not have been reportable anyway, nothing was evaded.</li>
  * </ul>
@@ -31,18 +30,25 @@ import java.util.List;
 @Component
 public class StructuringRule implements AmlRule {
 
-    static final Duration WINDOW = Duration.ofHours(24);
+    private final AmlProperties.Structuring config;
 
     /**
-     * How close to the threshold an amount has to be to look deliberate. Set to
-     * 80% of {@link LargeAmountRule#THRESHOLD}: someone structuring aims just
-     * under the line, not far below it.
+     * Reads the large-amount threshold as well as its own settings. Structuring
+     * is defined relative to the line being evaded, so the two cannot be
+     * configured independently without the rule becoming nonsense.
      */
-    static final BigDecimal NEAR_THRESHOLD_FLOOR = new BigDecimal("400000");
+    private final BigDecimal largeAmountThreshold;
 
-    static final int MIN_TRANSACTIONS = 3;
+    public StructuringRule(AmlProperties properties) {
+        this.config = properties.structuring();
+        this.largeAmountThreshold = properties.largeAmount().threshold();
 
-    private static final int POINTS = 30;
+        if (config.nearThresholdFloor().compareTo(largeAmountThreshold) >= 0) {
+            throw new IllegalStateException(
+                    "aml.structuring.near-threshold-floor must be below "
+                            + "aml.large-amount.threshold, otherwise no amount can ever qualify");
+        }
+    }
 
     @Override
     public RuleCode code() {
@@ -59,12 +65,12 @@ public class StructuringRule implements AmlRule {
             return RuleResult.notTriggered(code());
         }
 
-        List<Transaction> qualifying = context.precedingWindow(WINDOW).stream()
+        List<Transaction> qualifying = context.precedingWindow(config.window()).stream()
                 .filter(transaction -> isNearThreshold(transaction.getAmount()))
                 .toList();
 
         int count = qualifying.size() + 1;
-        if (count < MIN_TRANSACTIONS) {
+        if (count < config.minTransactions()) {
             return RuleResult.notTriggered(code());
         }
 
@@ -72,30 +78,26 @@ public class StructuringRule implements AmlRule {
                 .map(Transaction::getAmount)
                 .reduce(current.getAmount(), BigDecimal::add);
 
-        if (total.compareTo(LargeAmountRule.THRESHOLD) <= 0) {
+        if (total.compareTo(largeAmountThreshold) <= 0) {
             return RuleResult.notTriggered(code());
         }
 
-        return RuleResult.triggered(code(), POINTS,
+        return RuleResult.triggered(code(), config.points(),
                 ("%d transactions totalling %s %s in %d hours, each individually below "
                         + "the %s threshold").formatted(
                         count,
                         total.toPlainString(),
                         current.getCurrency(),
-                        WINDOW.toHours(),
-                        LargeAmountRule.THRESHOLD.toPlainString()));
+                        config.window().toHours(),
+                        largeAmountThreshold.toPlainString()));
     }
 
     /**
      * Both bounds inclusive of the threshold itself: an amount exactly on the
-     * line was still chosen to stay at it.
-     *
-     * <p>Reading {@code LargeAmountRule.THRESHOLD} rather than declaring its own
-     * copy is deliberate — structuring is defined relative to the threshold being
-     * evaded, so the two must move together.
+     * line was still chosen to sit at it.
      */
-    private static boolean isNearThreshold(BigDecimal amount) {
-        return amount.compareTo(NEAR_THRESHOLD_FLOOR) >= 0
-                && amount.compareTo(LargeAmountRule.THRESHOLD) <= 0;
+    private boolean isNearThreshold(BigDecimal amount) {
+        return amount.compareTo(config.nearThresholdFloor()) >= 0
+                && amount.compareTo(largeAmountThreshold) <= 0;
     }
 }

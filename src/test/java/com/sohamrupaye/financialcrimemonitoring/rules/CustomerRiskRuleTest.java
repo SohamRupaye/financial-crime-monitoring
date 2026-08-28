@@ -12,12 +12,13 @@ import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.accoun
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.context;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.customer;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.historyOf;
+import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.properties;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.transaction;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CustomerRiskRuleTest {
 
-    private final CustomerRiskRule rule = new CustomerRiskRule();
+    private final CustomerRiskRule rule = new CustomerRiskRule(properties());
 
     private RuleResult evaluate(RiskLevel riskLevel) {
         Customer customer = customer(riskLevel);

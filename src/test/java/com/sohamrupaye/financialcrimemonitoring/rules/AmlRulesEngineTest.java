@@ -13,6 +13,7 @@ import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.NOW;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.account;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.customer;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.historyOf;
+import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.properties;
 import static com.sohamrupaye.financialcrimemonitoring.rules.RuleFixtures.transaction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,7 +47,7 @@ class AmlRulesEngineTest {
     @DisplayName("every rule contributes exactly one result")
     void collectsOneResultPerRule() {
         AmlRulesEngine engine = engineOf(
-                alwaysFiring(RuleCode.VELOCITY), new LargeAmountRule());
+                alwaysFiring(RuleCode.VELOCITY), new LargeAmountRule(properties()));
 
         List<RuleResult> results = engine.evaluate(transaction);
 
@@ -63,7 +64,7 @@ class AmlRulesEngineTest {
         AmlRulesEngine engine = engineOf(
                 alwaysFiring(RuleCode.COUNTRY_RISK),
                 alwaysFiring(RuleCode.CUSTOMER_RISK),
-                new LargeAmountRule());
+                new LargeAmountRule(properties()));
 
         assertThat(engine.evaluate(transaction))
                 .extracting(RuleResult::code)
@@ -74,7 +75,7 @@ class AmlRulesEngineTest {
     @Test
     @DisplayName("untriggered rules are still reported")
     void reportsUntriggeredRules() {
-        AmlRulesEngine engine = engineOf(new LargeAmountRule());
+        AmlRulesEngine engine = engineOf(new LargeAmountRule(properties()));
 
         // Small amount, so the only rule stays quiet. The result still comes back,
         // which is what later makes "why was there no alert" answerable.

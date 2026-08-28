@@ -2,8 +2,6 @@ package com.sohamrupaye.financialcrimemonitoring.rules;
 
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
-
 /**
  * Flags a burst of activity on one account.
  *
@@ -14,12 +12,11 @@ import java.time.Duration;
 @Component
 public class VelocityRule implements AmlRule {
 
-    static final Duration WINDOW = Duration.ofMinutes(10);
+    private final AmlProperties.Velocity config;
 
-    /** Exceeding this count triggers; matching it exactly does not. */
-    static final int MAX_TRANSACTIONS = 10;
-
-    private static final int POINTS = 20;
+    public VelocityRule(AmlProperties properties) {
+        this.config = properties.velocity();
+    }
 
     @Override
     public RuleCode code() {
@@ -31,14 +28,14 @@ public class VelocityRule implements AmlRule {
         // The history port excludes the transaction under evaluation, so it is
         // added back here: the question is how much activity there has been
         // including this movement, not before it.
-        int count = context.precedingWindow(WINDOW).size() + 1;
+        int count = context.precedingWindow(config.window()).size() + 1;
 
-        if (count <= MAX_TRANSACTIONS) {
+        if (count <= config.maxTransactions()) {
             return RuleResult.notTriggered(code());
         }
 
-        return RuleResult.triggered(code(), POINTS,
+        return RuleResult.triggered(code(), config.points(),
                 "%d transactions in %d minutes exceeded the limit of %d".formatted(
-                        count, WINDOW.toMinutes(), MAX_TRANSACTIONS));
+                        count, config.window().toMinutes(), config.maxTransactions()));
     }
 }

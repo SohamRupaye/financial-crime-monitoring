@@ -24,7 +24,7 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | Customer management | ✅ Built | Create, fetch, list with paging and risk-level filter |
 | Account management | ✅ Built | Open an account, fetch by number, list per customer |
 | Transaction ingestion | ✅ Built | Ingest, fetch, paged search with optional filters |
-| AML rules engine | 📋 Planned | Sections 4–5 — the core of the project |
+| AML rules engine | ✅ Built | Five rules, all thresholds in configuration |
 | Risk scoring | 📋 Planned | Section 6 |
 | Explainable assessments | 📋 Planned | Section 7 |
 | Alerts | 📋 Planned | Section 8 |
@@ -245,7 +245,7 @@ Intended entry point:
 
 ## 4. AML Rules Engine
 
-> 📋 Planned. This is the core of the project.
+> ✅ Built. This is the core of the project.
 
 The engine evaluates a transaction against a collection of independent rules and combines
 their output into a single assessment.
@@ -278,7 +278,29 @@ adding a sixth rule requires no change to the engine.
 
 ## 5. AML Rules
 
-> 📋 Planned. All thresholds below are configuration, not constants in code.
+> ✅ Built. Every threshold, window and weight below is configuration, bound onto a validated
+> `AmlProperties` record and checked at startup — not a constant in code.
+
+```properties
+aml.large-amount.threshold=500000
+aml.large-amount.points=25
+
+aml.velocity.window=10m
+aml.velocity.max-transactions=10
+
+aml.structuring.window=24h
+aml.structuring.near-threshold-floor=400000
+aml.structuring.min-transactions=3
+
+aml.customer-risk.points.high=20
+aml.country-risk.elevated-risk-countries=XA,XB,XC,QM
+```
+
+Two settings are checked against each other rather than only in isolation: the structuring
+floor must sit below the large-amount threshold, or no amount could ever qualify as
+structuring and the rule would quietly stop working. `StructuringRule` refuses to start
+otherwise. Likewise every `RiskLevel` needs a configured weight — a missing key would read as
+zero points — so `CustomerRiskRule` fails at startup on a gap.
 
 ### Large Transaction Rule
 

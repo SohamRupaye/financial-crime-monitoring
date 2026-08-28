@@ -15,6 +15,8 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Fixtures for the rule tests. No Spring, no database — rules are pure logic and
@@ -26,6 +28,26 @@ final class RuleFixtures {
     static final Instant NOW = Instant.parse("2026-09-01T10:00:00Z");
 
     private RuleFixtures() {
+    }
+
+    /**
+     * The same values as {@code application.properties}, so a rule test and a
+     * running application agree on what the thresholds are. Tests that need a
+     * different threshold build their own {@link AmlProperties} instead of
+     * mutating this.
+     */
+    static AmlProperties properties() {
+        return new AmlProperties(
+                new AmlProperties.LargeAmount(new BigDecimal("500000"), 25),
+                new AmlProperties.Velocity(Duration.ofMinutes(10), 10, 20),
+                new AmlProperties.Structuring(
+                        Duration.ofHours(24), new BigDecimal("400000"), 3, 30),
+                new AmlProperties.CustomerRisk(Map.of(
+                        RiskLevel.LOW, 0,
+                        RiskLevel.MEDIUM, 10,
+                        RiskLevel.HIGH, 20,
+                        RiskLevel.CRITICAL, 30)),
+                new AmlProperties.CountryRisk(Set.of("XA", "XB", "XC", "QM"), 20));
     }
 
     static Instant minutesAgo(long minutes) {
