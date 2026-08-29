@@ -1,8 +1,10 @@
 package com.sohamrupaye.financialcrimemonitoring.controller;
 
 import com.sohamrupaye.financialcrimemonitoring.dto.CreateTransactionRequest;
+import com.sohamrupaye.financialcrimemonitoring.dto.RiskAssessmentResponse;
 import com.sohamrupaye.financialcrimemonitoring.dto.TransactionResponse;
 import com.sohamrupaye.financialcrimemonitoring.model.enums.TransactionType;
+import com.sohamrupaye.financialcrimemonitoring.service.RiskAssessmentService;
 import com.sohamrupaye.financialcrimemonitoring.service.TransactionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -28,9 +30,12 @@ import java.time.Instant;
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final RiskAssessmentService riskAssessmentService;
 
-    public TransactionController(TransactionService transactionService) {
+    public TransactionController(TransactionService transactionService,
+                                 RiskAssessmentService riskAssessmentService) {
         this.transactionService = transactionService;
+        this.riskAssessmentService = riskAssessmentService;
     }
 
     /** {@code POST /api/v1/transactions} */
@@ -73,5 +78,33 @@ public class TransactionController {
     @GetMapping("/{transactionReference}")
     public TransactionResponse get(@PathVariable String transactionReference) {
         return transactionService.findByReference(transactionReference);
+    }
+
+    /**
+     * {@code GET /api/v1/transactions/TXN-93842A1C/assessment}
+     *
+     * <p>404 if the transaction was never assessed. Ingestion always assesses, so
+     * in practice this means the reference itself is wrong.
+     */
+    @GetMapping("/{transactionReference}/assessment")
+    public RiskAssessmentResponse assessment(@PathVariable String transactionReference) {
+        return riskAssessmentService.findByTransactionReference(transactionReference);
+    }
+
+    /**
+     * {@code POST /api/v1/transactions/TXN-93842A1C/evaluate}
+     *
+     * <p>Re-runs the rules and replaces the assessment. POST rather than GET
+     * because it writes, and not PUT because the caller supplies no
+     * representation - the outcome depends entirely on current rule
+     * configuration.
+     *
+     * <p>Its reason for existing is tuning: after a threshold changes, being able
+     * to ask what a known transaction scores now is how you tell whether the
+     * change did what you wanted.
+     */
+    @PostMapping("/{transactionReference}/evaluate")
+    public RiskAssessmentResponse evaluate(@PathVariable String transactionReference) {
+        return riskAssessmentService.reassess(transactionReference);
     }
 }

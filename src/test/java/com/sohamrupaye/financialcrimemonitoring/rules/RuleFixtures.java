@@ -47,7 +47,20 @@ final class RuleFixtures {
                         RiskLevel.MEDIUM, 10,
                         RiskLevel.HIGH, 20,
                         RiskLevel.CRITICAL, 30)),
-                new AmlProperties.CountryRisk(Set.of("XA", "XB", "XC", "QM"), 20));
+                new AmlProperties.CountryRisk(Set.of("XA", "XB", "XC", "QM"), 20),
+                new AmlProperties.Scoring(100, Map.of(
+                        RiskLevel.LOW, 0,
+                        RiskLevel.MEDIUM, 30,
+                        RiskLevel.HIGH, 60,
+                        RiskLevel.CRITICAL, 80)));
+    }
+
+    /** The default configuration with {@code scoring} swapped out. */
+    static AmlProperties withScoring(AmlProperties.Scoring scoring) {
+        AmlProperties defaults = properties();
+        return new AmlProperties(defaults.largeAmount(), defaults.velocity(),
+                defaults.structuring(), defaults.customerRisk(), defaults.countryRisk(),
+                scoring);
     }
 
     static Instant minutesAgo(long minutes) {

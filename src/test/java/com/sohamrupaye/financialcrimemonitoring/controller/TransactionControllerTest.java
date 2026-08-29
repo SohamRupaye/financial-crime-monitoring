@@ -1,10 +1,15 @@
 package com.sohamrupaye.financialcrimemonitoring.controller;
 
 import com.sohamrupaye.financialcrimemonitoring.dto.CreateTransactionRequest;
+import com.sohamrupaye.financialcrimemonitoring.dto.RiskAssessmentResponse;
+import com.sohamrupaye.financialcrimemonitoring.dto.RuleResultResponse;
 import com.sohamrupaye.financialcrimemonitoring.dto.TransactionResponse;
 import com.sohamrupaye.financialcrimemonitoring.exception.BusinessRuleViolationException;
 import com.sohamrupaye.financialcrimemonitoring.exception.ResourceNotFoundException;
+import com.sohamrupaye.financialcrimemonitoring.model.enums.RiskLevel;
 import com.sohamrupaye.financialcrimemonitoring.model.enums.TransactionType;
+import com.sohamrupaye.financialcrimemonitoring.rules.RuleCode;
+import com.sohamrupaye.financialcrimemonitoring.service.RiskAssessmentService;
 import com.sohamrupaye.financialcrimemonitoring.service.TransactionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,10 +56,25 @@ class TransactionControllerTest {
     @MockitoBean
     private TransactionService transactionService;
 
+    @MockitoBean
+    private RiskAssessmentService riskAssessmentService;
+
     private static TransactionResponse sampleResponse() {
         return new TransactionResponse(TRANSACTION_REFERENCE, ACCOUNT_NUMBER, "CUST-3F2A9C41",
                 TransactionType.TRANSFER, new BigDecimal("485000.0000"), "INR",
                 "ACC-EXTERNAL-8841", "IN", OCCURRED_AT, Instant.parse("2026-09-01T10:00:05Z"));
+    }
+
+    private static RiskAssessmentResponse sampleAssessment() {
+        return new RiskAssessmentResponse(TRANSACTION_REFERENCE, 85, RiskLevel.CRITICAL,
+                Instant.parse("2026-09-01T10:00:05Z"),
+                List.of("Amount 485000.00 INR exceeded the 500000 threshold",
+                        "Customer risk rating is HIGH"),
+                List.of(new RuleResultResponse(RuleCode.LARGE_AMOUNT, true, 25,
+                                "Amount 485000.00 INR exceeded the 500000 threshold"),
+                        new RuleResultResponse(RuleCode.CUSTOMER_RISK, true, 20,
+                                "Customer risk rating is HIGH"),
+                        new RuleResultResponse(RuleCode.VELOCITY, false, 0, null)));
     }
 
     private static CreateTransactionRequest validRequest() {
@@ -183,5 +203,47 @@ class TransactionControllerTest {
         mockMvc.perform(get("/api/v1/transactions").param("transactionType", "BOGUS"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid parameter"));
+    }
+
+    @Test
+    @DisplayName("GET assessment returns the score with its reasons")
+    void getAssessment() throws Exception {
+        when(riskAssessmentService.findByTransactionReference(TRANSACTION_REFERENCE))
+                .thenReturn(sampleAssessment());
+
+        mockMvc.perform(get("/api/v1/transactions/{ref}/assessment", TRANSACTION_REFERENCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(85))
+                .andExpect(jsonPath("$.level").value("CRITICAL"))
+                .andExpect(jsonPath("$.reasons.length()").value(2))
+                // Quiet rules are reported too, so the list is longer than the
+                // reasons - that is what makes the score explainable rather than
+                // just itemised.
+                .andExpect(jsonPath("$.rules.length()").value(3))
+                .andExpect(jsonPath("$.rules[2].triggered").value(false));
+    }
+
+    @Test
+    @DisplayName("GET assessment for an unassessed transaction returns 404")
+    void getAssessmentMissing() throws Exception {
+        when(riskAssessmentService.findByTransactionReference("TXN-NOPE"))
+                .thenThrow(ResourceNotFoundException.of(
+                        "Risk assessment for transaction", "TXN-NOPE"));
+
+        mockMvc.perform(get("/api/v1/transactions/{ref}/assessment", "TXN-NOPE"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST evaluate re-runs the rules and returns the new assessment")
+    void evaluateReassesses() throws Exception {
+        when(riskAssessmentService.reassess(TRANSACTION_REFERENCE))
+                .thenReturn(sampleAssessment());
+
+        mockMvc.perform(post("/api/v1/transactions/{ref}/evaluate", TRANSACTION_REFERENCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionReference").value(TRANSACTION_REFERENCE));
+
+        verify(riskAssessmentService).reassess(TRANSACTION_REFERENCE);
     }
 }

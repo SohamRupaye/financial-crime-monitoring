@@ -25,14 +25,14 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | Account management | ✅ Built | Open an account, fetch by number, list per customer |
 | Transaction ingestion | ✅ Built | Ingest, fetch, paged search with optional filters |
 | AML rules engine | ✅ Built | Five rules, all thresholds in configuration |
-| Risk scoring | 📋 Planned | Section 6 |
-| Explainable assessments | 📋 Planned | Section 7 |
+| Risk scoring | ✅ Built | Configurable bands, capped total |
+| Explainable assessments | ✅ Built | Every rule result persisted, fired or not |
 | Alerts | 📋 Planned | Section 8 |
 | Investigation cases | 📋 Planned | Section 9 |
 | Synthetic data generator | 📋 Planned | Section 3 |
-| REST API | 🚧 In progress | Customers and accounts so far |
-| Schema and migrations | 🚧 In progress | Flyway V1–V2: `customers`, `accounts` |
-| Testing | 🚧 In progress | Three-layer suite for customers and accounts |
+| REST API | 🚧 In progress | Customers, accounts, transactions, assessments |
+| Schema and migrations | 🚧 In progress | Flyway V1–V4, up to `risk_rule_results` |
+| Testing | 🚧 In progress | Three layers, plus context-free tests for every rule |
 | Docker | ✅ Built | Dev and production compose stacks |
 | Authentication | 📋 Planned | Section 12 — **the API is currently open** |
 | Redis caching | 📋 Planned | Section 14 |
@@ -92,8 +92,8 @@ This project models that pipeline:
                                         Analyst Review
 ```
 
-Today the left-hand half of that diagram exists as far as persistence. The rules engine and
-everything downstream of it is the work in progress.
+Everything down to the risk assessment is built. Alerts and the case workflow below them are
+the work in progress.
 
 ---
 
@@ -155,7 +155,7 @@ would quietly corrupt every threshold comparison the rules engine makes.
 
 ## 2. Transaction Management
 
-> ✅ Built. Scoring on ingest arrives with the rules engine.
+> ✅ Built. Ingesting a transaction scores it in the same database transaction.
 
 Transactions represent financial activity on a monitored account.
 
@@ -200,7 +200,7 @@ Transactions can be:
 * Ingested through the REST API — the synthetic generator is still planned
 * Retrieved by reference
 * Searched by account, type, minimum amount and date range, paginated
-* Evaluated by the AML rules engine — planned, section 4
+* Scored by the AML rules engine on the way in, and re-scored on demand
 
 ---
 
@@ -377,7 +377,7 @@ function publishes.
 
 ## 6. Risk Scoring
 
-> 📋 Planned.
+> ✅ Built.
 
 Points from every triggered rule are summed, then capped at 100 — the five rules can total
 125, and a score that runs off the end of its own scale is not a score.
@@ -404,7 +404,7 @@ Bands, all configurable:
 
 ## 7. Explainable Risk Assessment
 
-> 📋 Planned.
+> ✅ Built.
 
 A score on its own is useless to an analyst who has to justify a decision. Every assessment
 carries the reasons that produced it.
@@ -414,19 +414,35 @@ carries the reasons that produced it.
   "transactionReference": "TXN-93842A1C",
   "score": 85,
   "level": "CRITICAL",
+  "assessedAt": "2026-09-01T10:00:05Z",
   "reasons": [
-    "Amount 485000.00 INR exceeded the 500000.00 threshold",
-    "12 transactions in the preceding 10 minutes exceeded the limit of 10",
+    "Amount 485000.00 INR exceeded the 500000 threshold",
+    "11 transactions in 10 minutes exceeded the limit of 10",
     "Customer risk rating is HIGH",
-    "Counterparty country requires additional scrutiny"
+    "Counterparty country XA requires additional scrutiny"
+  ],
+  "rules": [
+    { "code": "LARGE_AMOUNT",  "triggered": true,  "points": 25, "reason": "Amount 485000.00 INR exceeded the 500000 threshold" },
+    { "code": "VELOCITY",      "triggered": true,  "points": 20, "reason": "11 transactions in 10 minutes exceeded the limit of 10" },
+    { "code": "STRUCTURING",   "triggered": false, "points": 0,  "reason": null },
+    { "code": "CUSTOMER_RISK", "triggered": true,  "points": 20, "reason": "Customer risk rating is HIGH" },
+    { "code": "COUNTRY_RISK",  "triggered": true,  "points": 20, "reason": "Counterparty country XA requires additional scrutiny" }
   ]
 }
 ```
 
-Every rule result is persisted, including the ones that did not trigger. Knowing which rules
-looked and stayed quiet is what makes false-positive tuning possible later.
+`reasons` is the flat list of what fired; `rules` is the full picture, including the rules
+that looked and found nothing. Both are ordered by rule code, and that ordering is applied
+when the response is built rather than left to the database — the column stores the enum name,
+so a database sort would put `COUNTRY_RISK` ahead of `CUSTOMER_RISK` and a reloaded assessment
+would explain itself in a different order from a freshly scored one.
 
----
+Storing the quiet rules is what makes "why was there no alert on this" an answerable question,
+and it is the data a threshold gets tuned against.
+
+Assessment happens inside the same database transaction as the insert, so a transaction cannot
+exist unmonitored. `POST /evaluate` re-runs the rules against current configuration, which is
+how you check whether a threshold change did what you intended.
 
 ## 8. Alert Management
 
@@ -532,8 +548,8 @@ Still to come: filtering by risk level, country and alert status.
 ✅  POST   /api/v1/transactions
 ✅  GET    /api/v1/transactions
 ✅  GET    /api/v1/transactions/{transactionReference}
-📋  POST   /api/v1/transactions/{transactionReference}/evaluate
-📋  GET    /api/v1/transactions/{transactionReference}/assessment
+✅  POST   /api/v1/transactions/{transactionReference}/evaluate
+✅  GET    /api/v1/transactions/{transactionReference}/assessment
 
 📋  GET    /api/v1/alerts
 📋  GET    /api/v1/alerts/{alertReference}
@@ -617,7 +633,7 @@ Account        Transaction
 | `customers` | ✅ V1 |
 | `accounts` | ✅ V2 |
 | `transactions` | ✅ V3 |
-| `risk_assessments`, `risk_rule_results` | 📋 V4 |
+| `risk_assessments`, `risk_rule_results` | ✅ V4 |
 | `alerts` | 📋 V5 |
 | `investigation_cases`, `case_notes`, `users` | 📋 later |
 
@@ -693,8 +709,7 @@ This will only appear in the repository if it is actually finished, not as a stu
 
 ## 16. Testing
 
-> 🚧 Three layers in place for customers and accounts. Every new feature ships with its own
-> tests.
+> 🚧 Every feature so far ships with its own tests. Cases and the generator will too.
 
 ```text
 Unit          plain JUnit + Mockito, no Spring context
@@ -841,6 +856,9 @@ Worth stating plainly, because each of these is a real simplification:
   behavioural baselining.
 * **Customer risk is not yet dynamic.** The rating exists and is read by the rules, but
   nothing writes it back after an assessment.
+* **Assessments are overwritten, not versioned.** Re-evaluating replaces the previous score
+  rather than keeping it. A real system keeps every assessment: knowing a transaction scored
+  40 under last quarter's thresholds is part of the audit trail.
 * **No authentication.** See section 12.
 * **Elevated-risk countries are configuration, not a regulatory list.**
 * **Synthetic data only**, generated locally.
@@ -930,9 +948,7 @@ endpoint reference and the request DTOs are the schema.
 
 Next, in order:
 
-1. The AML rules engine and the five rules
-2. Risk scoring and explainable assessments
-3. Alerts with a validated status workflow
+1. Alerts with a validated status workflow
 
 Later, in rough priority order:
 

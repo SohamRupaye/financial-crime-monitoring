@@ -65,7 +65,8 @@ class CountryRiskRuleTest {
                 properties().velocity(),
                 properties().structuring(),
                 properties().customerRisk(),
-                new AmlProperties.CountryRisk(Set.of(" xa ", "Xb"), 20)));
+                new AmlProperties.CountryRisk(Set.of(" xa ", "Xb"), 20),
+                properties().scoring()));
 
         assertThat(lenient.elevatedRiskCountries()).containsExactlyInAnyOrder("XA", "XB");
     }

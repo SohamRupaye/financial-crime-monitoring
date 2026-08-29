@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +45,9 @@ class TransactionServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private RiskAssessmentService riskAssessmentService;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -80,6 +84,32 @@ class TransactionServiceTest {
         // Not overwritten with "now" - the reported time is the one the rules use.
         assertThat(response.occurredAt()).isEqualTo(OCCURRED_AT);
         assertThat(response.amount()).isEqualByComparingTo("485000.00");
+    }
+
+    @Test
+    @DisplayName("ingest() assesses the transaction it just saved")
+    void ingestAssessesOnTheWayIn() {
+        givenAccount(account("INR", AccountStatus.ACTIVE));
+
+        transactionService.ingest(request("INR", "IN"));
+
+        // Same transaction boundary as the insert, so a transaction cannot end
+        // up recorded but unmonitored.
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(riskAssessmentService).assess(captor.capture());
+        assertThat(captor.getValue().getTransactionReference()).startsWith("TXN-");
+    }
+
+    @Test
+    @DisplayName("a rejected transaction is never assessed")
+    void rejectedTransactionIsNotAssessed() {
+        when(accountRepository.findByAccountNumber(ACCOUNT_NUMBER))
+                .thenReturn(Optional.of(account("INR", AccountStatus.CLOSED)));
+
+        assertThatThrownBy(() -> transactionService.ingest(request("INR", "IN")))
+                .isInstanceOf(BusinessRuleViolationException.class);
+
+        verifyNoInteractions(riskAssessmentService);
     }
 
     @Test

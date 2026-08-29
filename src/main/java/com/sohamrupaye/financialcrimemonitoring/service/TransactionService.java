@@ -37,19 +37,27 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
+    private final RiskAssessmentService riskAssessmentService;
 
     public TransactionService(TransactionRepository transactionRepository,
-                              AccountRepository accountRepository) {
+                              AccountRepository accountRepository,
+                              RiskAssessmentService riskAssessmentService) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
+        this.riskAssessmentService = riskAssessmentService;
     }
 
     /**
      * Records a transaction against an existing account.
      *
      * <p>This is an ingestion endpoint, not a payment endpoint — it records that
-     * money moved elsewhere, so it does not touch balances. Scoring is separate
-     * and gets wired in once the rules engine exists.
+     * money moved elsewhere, so it does not touch balances.
+     *
+     * <p>Scoring happens in the same transaction as the insert, so a transaction
+     * cannot exist unassessed. That also means a rule failure rolls the ingest
+     * back, which is the right trade at this size: recording money movement while
+     * silently failing to monitor it is the one outcome an AML system must not
+     * produce. Section 15 of the readme covers where this stops scaling.
      */
     @Transactional
     public TransactionResponse ingest(CreateTransactionRequest request) {
@@ -73,6 +81,11 @@ public class TransactionService {
         log.info("Ingested transaction {} on account {} for {} {}",
                 saved.getTransactionReference(), account.getAccountNumber(),
                 saved.getAmount(), saved.getCurrency());
+
+        // The rules read history through a query, and Hibernate flushes before
+        // one, so the row above is visible - and excluded from its own window by
+        // the half-open upper bound.
+        riskAssessmentService.assess(saved);
 
         return TransactionMapper.toResponse(saved);
     }

@@ -36,7 +36,8 @@ public record AmlProperties(
         @Valid @NotNull Velocity velocity,
         @Valid @NotNull Structuring structuring,
         @Valid @NotNull CustomerRisk customerRisk,
-        @Valid @NotNull CountryRisk countryRisk
+        @Valid @NotNull CountryRisk countryRisk,
+        @Valid @NotNull Scoring scoring
 ) {
 
     public record LargeAmount(
@@ -70,6 +71,17 @@ public record AmlProperties(
     public record CountryRisk(
             @NotNull Set<String> elevatedRiskCountries,
             @Positive int points
+    ) {
+    }
+
+    /**
+     * {@code bands} maps each level to the lowest score that reaches it. Held as
+     * a floor per level rather than as ranges so the bands cannot overlap or
+     * leave a gap — with ranges, 0-29 and 31-59 would silently swallow 30.
+     */
+    public record Scoring(
+            @Positive int maxScore,
+            @NotEmpty Map<RiskLevel, @PositiveOrZero Integer> bands
     ) {
     }
 }
