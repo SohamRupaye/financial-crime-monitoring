@@ -58,6 +58,9 @@ class RiskAssessmentServiceTest {
     @Mock
     private TransactionRepository transactionRepository;
 
+    @Mock
+    private AlertService alertService;
+
     @InjectMocks
     private RiskAssessmentService riskAssessmentService;
 
@@ -220,5 +223,19 @@ class RiskAssessmentServiceTest {
 
         assertThat(response.reasons()).containsExactly(
                 "over the threshold", "elevated customer", "watched country");
+    }
+
+    @Test
+    @DisplayName("assess() hands the stored assessment to the alert service")
+    void assessOffersTheAssessmentForAlerting() {
+        givenRules(mixedResults(), 45, RiskLevel.MEDIUM);
+        when(riskAssessmentRepository.findByTransaction_TransactionReference(TRANSACTION_REFERENCE))
+                .thenReturn(Optional.empty());
+
+        RiskAssessment assessment = riskAssessmentService.assess(transaction);
+
+        // Whether it clears the threshold is the alert service's call, not this
+        // one's - but it always gets asked, in the same transaction.
+        verify(alertService).raiseIfNeeded(assessment);
     }
 }

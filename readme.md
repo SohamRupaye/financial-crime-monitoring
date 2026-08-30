@@ -27,7 +27,7 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | AML rules engine | ✅ Built | Five rules, all thresholds in configuration |
 | Risk scoring | ✅ Built | Configurable bands, capped total |
 | Explainable assessments | ✅ Built | Every rule result persisted, fired or not |
-| Alerts | 📋 Planned | Section 8 |
+| Alerts | 🚧 In progress | Raised on assessment; status workflow next |
 | Investigation cases | 📋 Planned | Section 9 |
 | Synthetic data generator | 📋 Planned | Section 3 |
 | REST API | 🚧 In progress | Customers, accounts, transactions, assessments |
@@ -446,7 +446,7 @@ how you check whether a threshold change did what you intended.
 
 ## 8. Alert Management
 
-> 📋 Planned.
+> 🚧 Alerts are raised on assessment. The status workflow and endpoints are next.
 
 An assessment at or above the configured alert threshold raises an alert.
 
@@ -470,6 +470,22 @@ ACKNOWLEDGED
 INVESTIGATING
 RESOLVED
 FALSE_POSITIVE
+```
+
+`RESOLVED` and `FALSE_POSITIVE` are both terminal, and the distinction between them is the
+useful part: a false positive says the rules were wrong, which is exactly the data a
+threshold gets tuned against.
+
+Two things alerting deliberately does not do. It never raises a second alert for the same
+assessment — an analyst should see one item in their queue, not one per re-evaluation. And a
+lower re-score never withdraws an alert that was already raised, because that alert may
+already be assigned and part-investigated, and quietly deleting it would take the analyst's
+work and the audit trail with it. Disagreeing with an alert is what `FALSE_POSITIVE` is for.
+
+The threshold is configured separately from the score bands:
+
+```properties
+aml.alerting.threshold=60
 ```
 
 Transitions are validated rather than free-form: an alert cannot jump from `OPEN` straight to
@@ -634,7 +650,7 @@ Account        Transaction
 | `accounts` | ✅ V2 |
 | `transactions` | ✅ V3 |
 | `risk_assessments`, `risk_rule_results` | ✅ V4 |
-| `alerts` | 📋 V5 |
+| `alerts` | ✅ V5 |
 | `investigation_cases`, `case_notes`, `users` | 📋 later |
 
 Migrations are immutable once applied — Flyway checksums them, so a schema change means a new

@@ -37,6 +37,17 @@ class AmlPropertiesTest {
 
         assertThat(properties.countryRisk().elevatedRiskCountries())
                 .containsExactlyInAnyOrder("XA", "XB", "XC", "QM");
+
+        assertThat(properties.alerting().threshold()).isEqualTo(60);
+    }
+
+    @Test
+    @DisplayName("the alert threshold sits inside the score scale")
+    void alertThresholdIsReachable() {
+        // A threshold above maxScore would mean nothing ever alerts, which is a
+        // configuration mistake that looks exactly like a quiet system.
+        assertThat(properties.alerting().threshold())
+                .isLessThanOrEqualTo(properties.scoring().maxScore());
     }
 
     @Test

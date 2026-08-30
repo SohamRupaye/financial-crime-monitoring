@@ -52,7 +52,8 @@ final class RuleFixtures {
                         RiskLevel.LOW, 0,
                         RiskLevel.MEDIUM, 30,
                         RiskLevel.HIGH, 60,
-                        RiskLevel.CRITICAL, 80)));
+                        RiskLevel.CRITICAL, 80)),
+                new AmlProperties.Alerting(60));
     }
 
     /** The default configuration with {@code scoring} swapped out. */
@@ -60,7 +61,7 @@ final class RuleFixtures {
         AmlProperties defaults = properties();
         return new AmlProperties(defaults.largeAmount(), defaults.velocity(),
                 defaults.structuring(), defaults.customerRisk(), defaults.countryRisk(),
-                scoring);
+                scoring, defaults.alerting());
     }
 
     static Instant minutesAgo(long minutes) {

@@ -37,15 +37,18 @@ public class RiskAssessmentService {
     private final RiskScorer riskScorer;
     private final RiskAssessmentRepository riskAssessmentRepository;
     private final TransactionRepository transactionRepository;
+    private final AlertService alertService;
 
     public RiskAssessmentService(AmlRulesEngine rulesEngine,
                                  RiskScorer riskScorer,
                                  RiskAssessmentRepository riskAssessmentRepository,
-                                 TransactionRepository transactionRepository) {
+                                 TransactionRepository transactionRepository,
+                                 AlertService alertService) {
         this.rulesEngine = rulesEngine;
         this.riskScorer = riskScorer;
         this.riskAssessmentRepository = riskAssessmentRepository;
         this.transactionRepository = transactionRepository;
+        this.alertService = alertService;
     }
 
     /**
@@ -78,6 +81,10 @@ public class RiskAssessmentService {
         log.info("Assessed transaction {} at {} ({}), {} of {} rules triggered",
                 transaction.getTransactionReference(), riskScore.score(), riskScore.level(),
                 results.stream().filter(RuleResult::triggered).count(), results.size());
+
+        // Same transaction boundary as the assessment, so an assessment worth
+        // alerting on cannot be stored without its alert.
+        alertService.raiseIfNeeded(saved);
 
         return saved;
     }

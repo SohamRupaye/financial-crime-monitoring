@@ -37,7 +37,8 @@ public record AmlProperties(
         @Valid @NotNull Structuring structuring,
         @Valid @NotNull CustomerRisk customerRisk,
         @Valid @NotNull CountryRisk countryRisk,
-        @Valid @NotNull Scoring scoring
+        @Valid @NotNull Scoring scoring,
+        @Valid @NotNull Alerting alerting
 ) {
 
     public record LargeAmount(
@@ -82,6 +83,17 @@ public record AmlProperties(
     public record Scoring(
             @Positive int maxScore,
             @NotEmpty Map<RiskLevel, @PositiveOrZero Integer> bands
+    ) {
+    }
+
+    /**
+     * {@code threshold} is the score at which an alert is raised. Kept separate
+     * from the score bands: which band a score falls into and whether it is worth
+     * a person's attention are two different decisions, and an institution may
+     * well want to alert partway through a band.
+     */
+    public record Alerting(
+            @Positive int threshold
     ) {
     }
 }
