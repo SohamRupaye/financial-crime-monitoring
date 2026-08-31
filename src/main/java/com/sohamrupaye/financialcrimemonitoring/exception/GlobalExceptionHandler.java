@@ -53,6 +53,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 409, not 422: the request is fine and would have worked from a different
+     * starting state. What is wrong is the state, not the request.
+     */
+    @ExceptionHandler(IllegalStatusTransitionException.class)
+    ProblemDetail handleIllegalStatusTransition(IllegalStatusTransitionException exception) {
+        log.debug("Illegal status transition: {}", exception.getMessage());
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Status transition not allowed");
+        return problem;
+    }
+
+    /**
      * 422 rather than 400: the request was syntactically fine and every field
      * passed validation, so the problem is not with the request's form but with
      * what it asks for.

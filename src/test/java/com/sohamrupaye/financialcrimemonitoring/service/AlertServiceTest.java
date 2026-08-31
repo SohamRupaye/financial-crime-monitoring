@@ -1,5 +1,8 @@
 package com.sohamrupaye.financialcrimemonitoring.service;
 
+import com.sohamrupaye.financialcrimemonitoring.dto.AlertResponse;
+import com.sohamrupaye.financialcrimemonitoring.exception.IllegalStatusTransitionException;
+import com.sohamrupaye.financialcrimemonitoring.exception.ResourceNotFoundException;
 import com.sohamrupaye.financialcrimemonitoring.model.Account;
 import com.sohamrupaye.financialcrimemonitoring.model.Alert;
 import com.sohamrupaye.financialcrimemonitoring.model.Customer;
@@ -17,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -117,5 +123,72 @@ class AlertServiceTest {
 
         verify(alertRepository, never()).delete(any());
         verify(alertRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateStatus() moves the alert and reports the new state")
+    void updateStatusMovesTheAlert() {
+        Alert alert = new Alert("ALRT-7C1D40A9", assessment(85, RiskLevel.CRITICAL));
+        when(alertRepository.findByAlertReference("ALRT-7C1D40A9"))
+                .thenReturn(Optional.of(alert));
+
+        AlertResponse response =
+                alertService().updateStatus("ALRT-7C1D40A9", AlertStatus.ACKNOWLEDGED);
+
+        assertThat(response.status()).isEqualTo(AlertStatus.ACKNOWLEDGED);
+        assertThat(alert.getStatus()).isEqualTo(AlertStatus.ACKNOWLEDGED);
+
+        // No save call: the alert is managed inside the transaction, so the change
+        // flushes on commit.
+        verify(alertRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateStatus() lets the entity refuse an illegal move")
+    void updateStatusPropagatesRefusal() {
+        when(alertRepository.findByAlertReference("ALRT-7C1D40A9"))
+                .thenReturn(Optional.of(new Alert("ALRT-7C1D40A9",
+                        assessment(85, RiskLevel.CRITICAL))));
+
+        // The rule lives on Alert, not here, so the service does not re-implement
+        // it and cannot disagree with it.
+        assertThatThrownBy(() -> alertService()
+                .updateStatus("ALRT-7C1D40A9", AlertStatus.RESOLVED))
+                .isInstanceOf(IllegalStatusTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("updateStatus() rejects an unknown alert reference")
+    void updateStatusRejectsUnknownAlert() {
+        when(alertRepository.findByAlertReference("ALRT-NOPE")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> alertService()
+                .updateStatus("ALRT-NOPE", AlertStatus.ACKNOWLEDGED))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Alert");
+    }
+
+    @Test
+    @DisplayName("search() filters by status only when one is given")
+    void searchFiltersOnlyWhenAsked() {
+        when(alertRepository.findAll(Pageable.unpaged()))
+                .thenReturn(Page.empty());
+
+        alertService().search(null, Pageable.unpaged());
+
+        verify(alertRepository).findAll(Pageable.unpaged());
+        verify(alertRepository, never()).findByStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("search() uses the status query when one is given")
+    void searchUsesStatusQuery() {
+        when(alertRepository.findByStatus(AlertStatus.OPEN, Pageable.unpaged()))
+                .thenReturn(Page.empty());
+
+        alertService().search(AlertStatus.OPEN, Pageable.unpaged());
+
+        verify(alertRepository).findByStatus(AlertStatus.OPEN, Pageable.unpaged());
+        verify(alertRepository, never()).findAll(any(Pageable.class));
     }
 }

@@ -27,10 +27,10 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | AML rules engine | ✅ Built | Five rules, all thresholds in configuration |
 | Risk scoring | ✅ Built | Configurable bands, capped total |
 | Explainable assessments | ✅ Built | Every rule result persisted, fired or not |
-| Alerts | 🚧 In progress | Raised on assessment; status workflow next |
+| Alerts | ✅ Built | Raised on assessment, with a validated status workflow |
 | Investigation cases | 📋 Planned | Section 9 |
 | Synthetic data generator | 📋 Planned | Section 3 |
-| REST API | 🚧 In progress | Customers, accounts, transactions, assessments |
+| REST API | 🚧 In progress | Everything except cases |
 | Schema and migrations | 🚧 In progress | Flyway V1–V4, up to `risk_rule_results` |
 | Testing | 🚧 In progress | Three layers, plus context-free tests for every rule |
 | Docker | ✅ Built | Dev and production compose stacks |
@@ -446,7 +446,7 @@ how you check whether a threshold change did what you intended.
 
 ## 8. Alert Management
 
-> 🚧 Alerts are raised on assessment. The status workflow and endpoints are next.
+> ✅ Built.
 
 An assessment at or above the configured alert threshold raises an alert.
 
@@ -475,6 +475,26 @@ FALSE_POSITIVE
 `RESOLVED` and `FALSE_POSITIVE` are both terminal, and the distinction between them is the
 useful part: a false positive says the rules were wrong, which is exactly the data a
 threshold gets tuned against.
+
+Transitions are validated rather than free-form, and the table lives on the `Alert` entity
+rather than in a service — it is an invariant of the alert, so there should be no path that
+can bypass it.
+
+```text
+OPEN ──────────► ACKNOWLEDGED ──────► INVESTIGATING ──────► RESOLVED
+  │                    │                     │
+  └────────────────────┴─────────────────────┴──────────► FALSE_POSITIVE
+```
+
+`FALSE_POSITIVE` is reachable from every open state: an analyst who can see at a glance that
+the rules were wrong should not have to walk an alert through acknowledgement and
+investigation to say so. `RESOLVED` is not — resolving means somebody looked, and the workflow
+should reflect that they did. Nothing moves out of a terminal state, and moving to the status
+an alert already has is refused too: a repeated `PATCH` is more likely a client that lost
+track of the state than a deliberate no-op.
+
+An illegal transition is a **409**, not a 400. The request is fine and would have worked from
+a different starting state; what conflicts is the state.
 
 Two things alerting deliberately does not do. It never raises a second alert for the same
 assessment — an analyst should see one item in their queue, not one per re-evaluation. And a
@@ -567,9 +587,9 @@ Still to come: filtering by risk level, country and alert status.
 ✅  POST   /api/v1/transactions/{transactionReference}/evaluate
 ✅  GET    /api/v1/transactions/{transactionReference}/assessment
 
-📋  GET    /api/v1/alerts
-📋  GET    /api/v1/alerts/{alertReference}
-📋  PATCH  /api/v1/alerts/{alertReference}/status
+✅  GET    /api/v1/alerts
+✅  GET    /api/v1/alerts/{alertReference}
+✅  PATCH  /api/v1/alerts/{alertReference}/status
 
 📋  GET    /api/v1/cases
 📋  POST   /api/v1/cases
@@ -964,13 +984,12 @@ endpoint reference and the request DTOs are the schema.
 
 Next, in order:
 
-1. Alerts with a validated status workflow
+1. Investigation cases with notes and assignment
+2. Synthetic data generator
+3. OpenAPI documentation
 
 Later, in rough priority order:
 
-* Investigation cases with notes and assignment
-* Synthetic data generator
-* OpenAPI documentation
 * JWT authentication and role-based authorization
 * Redis caching for rule configuration and risk profiles
 * Kafka-based asynchronous ingestion

@@ -1,11 +1,18 @@
 package com.sohamrupaye.financialcrimemonitoring.service;
 
+import com.sohamrupaye.financialcrimemonitoring.dto.AlertResponse;
+import com.sohamrupaye.financialcrimemonitoring.dto.AlertSummaryResponse;
+import com.sohamrupaye.financialcrimemonitoring.exception.ResourceNotFoundException;
+import com.sohamrupaye.financialcrimemonitoring.mapper.AlertMapper;
 import com.sohamrupaye.financialcrimemonitoring.model.Alert;
 import com.sohamrupaye.financialcrimemonitoring.model.RiskAssessment;
+import com.sohamrupaye.financialcrimemonitoring.model.enums.AlertStatus;
 import com.sohamrupaye.financialcrimemonitoring.repository.AlertRepository;
 import com.sohamrupaye.financialcrimemonitoring.rules.AmlProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +69,45 @@ public class AlertService {
                 assessment.getRiskLevel());
 
         return Optional.of(alert);
+    }
+
+    public Page<AlertSummaryResponse> search(AlertStatus status, Pageable pageable) {
+        Page<Alert> alerts = status == null
+                ? alertRepository.findAll(pageable)
+                : alertRepository.findByStatus(status, pageable);
+
+        return alerts.map(AlertMapper::toSummary);
+    }
+
+    public AlertResponse findByReference(String alertReference) {
+        return AlertMapper.toResponse(requireByReference(alertReference));
+    }
+
+    /**
+     * Moves an alert through the workflow.
+     *
+     * <p>The rule about which moves are legal lives on {@link Alert}, not here —
+     * it is an invariant of the alert rather than of this method, and putting it
+     * in the entity means no other path can bypass it.
+     */
+    @Transactional
+    public AlertResponse updateStatus(String alertReference, AlertStatus target) {
+        Alert alert = requireByReference(alertReference);
+        AlertStatus previous = alert.getStatus();
+
+        alert.transitionTo(target);
+
+        log.info("Alert {} moved from {} to {}", alertReference, previous, target);
+
+        // No explicit save: the alert is a managed entity inside this transaction,
+        // so the change is flushed on commit. Calling save would work and would
+        // also suggest it were necessary.
+        return AlertMapper.toResponse(alert);
+    }
+
+    private Alert requireByReference(String alertReference) {
+        return alertRepository.findByAlertReference(alertReference)
+                .orElseThrow(() -> ResourceNotFoundException.of("Alert", alertReference));
     }
 
     private String generateReference() {
