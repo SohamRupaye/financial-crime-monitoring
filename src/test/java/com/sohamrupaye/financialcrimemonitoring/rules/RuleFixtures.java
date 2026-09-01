@@ -56,6 +56,23 @@ final class RuleFixtures {
                 new AmlProperties.Alerting(60));
     }
 
+    /**
+     * The default configuration with the amount thresholds swapped out, for the
+     * cases the shipped numbers cannot reach.
+     */
+    static AmlProperties withAmounts(String largeAmountThreshold,
+                                     String nearThresholdFloor,
+                                     int minTransactions) {
+        AmlProperties defaults = properties();
+        return new AmlProperties(
+                new AmlProperties.LargeAmount(new BigDecimal(largeAmountThreshold), 25),
+                defaults.velocity(),
+                new AmlProperties.Structuring(Duration.ofHours(24),
+                        new BigDecimal(nearThresholdFloor), minTransactions, 30),
+                defaults.customerRisk(), defaults.countryRisk(), defaults.scoring(),
+                defaults.alerting());
+    }
+
     /** The default configuration with {@code scoring} swapped out. */
     static AmlProperties withScoring(AmlProperties.Scoring scoring) {
         AmlProperties defaults = properties();

@@ -32,7 +32,7 @@ state of the code — everything marked *Planned* is designed but not yet writte
 | Synthetic data generator | 📋 Planned | Section 3 |
 | REST API | 🚧 In progress | Everything except cases |
 | Schema and migrations | 🚧 In progress | Flyway V1–V4, up to `risk_rule_results` |
-| Testing | 🚧 In progress | Three layers, plus context-free tests for every rule |
+| Testing | ✅ Built | 180 tests: unit, slice, and one end-to-end run |
 | Docker | ✅ Built | Dev and production compose stacks |
 | Authentication | 📋 Planned | Section 12 — **the API is currently open** |
 | Redis caching | 📋 Planned | Section 14 |
@@ -745,7 +745,7 @@ This will only appear in the repository if it is actually finished, not as a stu
 
 ## 16. Testing
 
-> 🚧 Every feature so far ships with its own tests. Cases and the generator will too.
+> ✅ Built for everything so far. Cases and the generator will ship with their own.
 
 ```text
 Unit          plain JUnit + Mockito, no Spring context
@@ -757,13 +757,32 @@ Repository and integration tests run against a real PostgreSQL 17 container, the
 version as the compose stacks, rather than an embedded database that would accept SQL
 Postgres rejects.
 
-Priority test areas as features land:
+Where the effort goes:
 
-* Individual AML rules, especially threshold and time-window boundaries
-* Structuring and velocity detection
-* Score aggregation and band boundaries
-* Alert generation and status transitions
-* Request validation and error responses
+* **Rule boundaries.** An amount exactly on a threshold, one cent either side of it, a
+  transaction exactly on a window's edge and one a millisecond outside. These are invisible in
+  normal use and they decide whether an alert fires, so every edge is pinned rather than
+  sampled. `BigDecimal.compareTo` throughout, never `equals` — `500000` and `500000.0000` are
+  the same amount and unequal objects, and that is where money bugs live.
+* **The cases the shipped configuration cannot reach.** With a floor of 400,000 and a
+  threshold of 500,000, three qualifying amounts always sum past the threshold, so
+  structuring's total check can never be the thing that stops it. It stops being unreachable
+  the moment someone widens the band while tuning, so it is tested against a configuration
+  where it matters.
+* **Score bands and the cap.** Both sides of 29/30, 59/60, 79/80, and five rules firing at
+  once capping at 100.
+* **The alert workflow.** Every legal transition, and every refused one, driven off the same
+  table the entity uses.
+* **One end-to-end run.** Four split transfers by an elevated-risk customer, over HTTP,
+  against a real PostgreSQL: score 70, three reasons in order, exactly one alert, acknowledged,
+  and then a refused jump to `RESOLVED`. Plus the quiet path — ordinary activity scoring zero
+  and raising nothing, because a system that alerts on everything is as useless as one that
+  alerts on nothing.
+
+Rules are tested without Spring at all. They receive a context object rather than a
+repository, so the whole set runs in milliseconds against an in-memory history that implements
+the documented window contract — which is also what makes the boundary cases above cheap enough
+to write exhaustively.
 
 ---
 
