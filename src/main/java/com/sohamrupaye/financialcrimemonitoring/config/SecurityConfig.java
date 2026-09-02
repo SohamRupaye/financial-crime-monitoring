@@ -10,37 +10,25 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Web security.
  *
- * <p>Adding {@code spring-boot-starter-security} to the classpath locks down every
- * endpoint behind HTTP Basic with a password printed at startup. That default is
- * why an explicit chain is needed as soon as there is an API to call.
- *
  * <p><strong>The API is currently open. This is temporary scaffolding.</strong>
- * There is no {@code User} entity or JWT support yet, so requiring authentication
- * would leave no way to authenticate. Section 12 of the readme calls for JWT plus
- * the ANALYST / INVESTIGATOR / ADMIN roles; until that exists, treat this service
- * as unauthenticated and do not point it at real data.
+ * There is no {@code User} entity or JWT support yet, so requiring
+ * authentication would leave no way to authenticate. Until section 12 of the
+ * readme is built, treat this service as unauthenticated and do not point it at
+ * real data.
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    /**
-     * One {@code SecurityFilterChain} bean replaces the auto-configured default.
-     *
-     * <p>The lambda style below is the only option in Spring Security 6+; the old
-     * chained {@code .and()} calls and {@code WebSecurityConfigurerAdapter} are
-     * both gone, which is why older tutorials will not compile here.
-     */
+    /** Replaces the auto-configured chain, which locks everything behind Basic. */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                // Safe to disable for a token-authenticated REST API with no
-                // cookie-based session. Never disable it for a browser app that
-                // authenticates with cookies.
+                // Safe for a token-authenticated API with no cookie session.
+                // Never disable it for a browser app that authenticates by cookie.
                 .csrf(csrf -> csrf.disable())
 
-                // No server-side session; every request must stand alone. This is
-                // what "stateless" means in practice and is required before JWT.
+                // No server-side session; required before JWT.
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
@@ -52,9 +40,8 @@ public class SecurityConfig {
                         // TODO: replace with .authenticated() and add JWT filter.
                         .requestMatchers("/api/**").permitAll()
 
-                        // Anything not listed above still requires authentication.
-                        // Default-deny: new endpoints are protected until someone
-                        // deliberately opens them.
+                        // Default-deny: a new endpoint is protected until
+                        // someone deliberately opens it.
                         .anyRequest().authenticated())
 
                 .httpBasic(basic -> {

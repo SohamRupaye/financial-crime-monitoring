@@ -19,22 +19,16 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Slice test — layer 2 of 3.
+ * The JPA slice only — entities, repositories, a datasource. Each test runs in a
+ * transaction that is rolled back afterwards.
  *
- * <p>{@code @DataJpaTest} starts only the JPA slice: entities, repositories and a
- * datasource. No web layer, no controllers, no security. It also wraps each test
- * in a transaction and rolls it back afterwards, so tests cannot leak state into
- * one another.
+ * <p>{@code replace = NONE} is essential: {@code @DataJpaTest} otherwise swaps in
+ * an embedded database, which would quietly test against a different engine than
+ * production.
  *
- * <p>{@code @AutoConfigureTestDatabase(replace = NONE)} is essential. By default
- * {@code @DataJpaTest} swaps in an embedded database; that default would either
- * fail (no H2 on the classpath) or, worse, quietly test against a different
- * engine than production. NONE keeps the Testcontainers PostgreSQL from
- * {@code TestcontainersConfiguration}.
- *
- * <p>{@code JpaAuditingConfig} must be imported explicitly: {@code @DataJpaTest}
- * only loads the slice, not every {@code @Configuration} class, so without this
- * the {@code NOT NULL} audit columns would be null and every insert would fail.
+ * <p>{@code JpaAuditingConfig} has to be imported explicitly, because the slice
+ * does not load every {@code @Configuration}. Without it the {@code NOT NULL}
+ * audit columns stay null and every insert fails.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -55,7 +49,7 @@ class CustomerRepositoryTest {
         Customer saved = customerRepository.save(
                 newCustomer("CUST-A0000001", "a@example.com", "IN", RiskLevel.LOW));
 
-        // An ID proves BIGSERIAL is wired; timestamps prove @EnableJpaAuditing is.
+        // An ID proves BIGSERIAL is wired; timestamps prove auditing is.
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getUpdatedAt()).isNotNull();
@@ -71,7 +65,6 @@ class CustomerRepositoryTest {
 
         assertThat(found).isPresent();
         assertThat(found.get().getEmail()).isEqualTo("b@example.com");
-        // Proves EnumType.STRING round-trips, rather than an ordinal.
         assertThat(found.get().getRiskLevel()).isEqualTo(RiskLevel.HIGH);
     }
 
@@ -88,8 +81,8 @@ class CustomerRepositoryTest {
                 newCustomer("CUST-C0000003", "c@example.com", "IN", RiskLevel.LOW));
 
         assertThat(customerRepository.existsByEmail("c@example.com")).isTrue();
-        // Documents real behaviour: Postgres compares text exactly. This is
-        // precisely why CustomerService lowercases before checking.
+        // Postgres compares text exactly, which is why the service lowercases
+        // before checking.
         assertThat(customerRepository.existsByEmail("C@EXAMPLE.COM")).isFalse();
     }
 

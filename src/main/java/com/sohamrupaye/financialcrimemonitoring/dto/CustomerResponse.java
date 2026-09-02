@@ -12,14 +12,9 @@ import java.time.LocalDate;
  * symmetric: this exposes {@code customerReference} and {@code riskLevel}, which
  * the server owns and a client may not set.
  *
- * <p>Returning the {@code Customer} entity instead would mean:
- * <ul>
- *   <li>every column becomes public API, so renaming one breaks clients;</li>
- *   <li>lazy associations serialise on access, firing surprise N+1 queries — or
- *       failing outright once {@code open-in-view} is off, as it is here;</li>
- *   <li>the whole graph leaks, since serialising a customer would drag in its
- *       accounts, their transactions, and every alert attached to them.</li>
- * </ul>
+ * <p>Returning the entity instead would make every column public API, and
+ * serialising it would drag in the accounts, their transactions and every alert
+ * attached to them.
  */
 public record CustomerResponse(
         String customerReference,

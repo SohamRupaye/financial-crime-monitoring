@@ -22,17 +22,12 @@ import java.util.UUID;
  * Business rules for customers. This is where the application's actual decisions
  * live — the controller only translates HTTP, the repository only moves rows.
  *
- * <p>Deliberately a class, not a {@code CustomerService} interface plus a
- * {@code CustomerServiceImpl}. That pair is everywhere in older Spring codebases
- * because pre-5.0 Spring needed an interface for proxying, and because mocking
- * frameworks once required one. Neither is true now: Spring proxies classes via
- * CGLIB and Mockito mocks them fine. An interface with exactly one implementation
- * is two files to read instead of one. Add the interface when a second
- * implementation genuinely appears.
+ * <p>A class rather than an interface plus a single {@code Impl}. Spring proxies
+ * classes and Mockito mocks them, so the pair would be two files to read instead
+ * of one. Add the interface when a second implementation appears.
  *
- * <p>{@code @Transactional(readOnly = true)} at class level makes reads the
- * default — it lets the driver skip dirty-checking and flushing, and documents
- * intent. Methods that write override it with a plain {@code @Transactional}.
+ * <p>{@code readOnly = true} at class level makes reads the default; writes
+ * override it with a plain {@code @Transactional}.
  */
 @Service
 @Transactional(readOnly = true)
@@ -42,15 +37,6 @@ public class CustomerService {
 
     private static final String REFERENCE_PREFIX = "CUST-";
 
-    /**
-     * Constructor injection, and the field is {@code final}.
-     *
-     * <p>Prefer this to {@code @Autowired} on a field, which cannot be final, hides
-     * dependencies from anyone constructing the class in a test, and lets a class
-     * quietly accumulate eight collaborators without the constructor getting
-     * embarrassing enough to notice. With a single constructor, the
-     * {@code @Autowired} annotation itself is optional and omitted here.
-     */
     private final CustomerRepository customerRepository;
 
     public CustomerService(CustomerRepository customerRepository) {
@@ -58,9 +44,7 @@ public class CustomerService {
     }
 
     public Page<CustomerResponse> findAll(Pageable pageable) {
-        // Page.map keeps the paging metadata (total, page number) intact while
-        // converting the content. Never return Page<Customer> from a service:
-        // that would leak entities to the controller.
+        // Page.map keeps the paging metadata intact while converting the content.
         return customerRepository.findAll(pageable).map(CustomerMapper::toResponse);
     }
 
@@ -74,21 +58,13 @@ public class CustomerService {
                 .map(CustomerMapper::toResponse);
     }
 
-    /**
-     * Creates a customer.
-     *
-     * <p>{@code @Transactional} without {@code readOnly} opens a read-write
-     * transaction spanning the whole method, so the duplicate check and the insert
-     * either both happen or neither does.
-     */
+    /** The duplicate check and the insert share one transaction. */
     @Transactional
     public CustomerResponse create(CreateCustomerRequest request) {
         String email = request.email().toLowerCase(Locale.ROOT);
 
-        // A friendly 409 for the common case. This is a check-then-act race, so
-        // the UNIQUE constraint in V1__create_customers_table.sql remains the
-        // real guarantee — application checks alone cannot enforce uniqueness
-        // under concurrency.
+        // A friendly 409 for the common case. Being check-then-act, the UNIQUE
+        // constraint in V1 remains the real guarantee.
         if (customerRepository.existsByEmail(email)) {
             throw new DuplicateResourceException("A customer with email %s already exists".formatted(email));
         }
@@ -100,8 +76,7 @@ public class CustomerService {
                 email,
                 request.dateOfBirth(),
                 request.countryCode().toUpperCase(Locale.ROOT),
-                // Server-assigned, never taken from the request. Every new customer
-                // starts LOW and is re-rated once transactions are assessed.
+                // Server-assigned. Everyone starts LOW and is re-rated later.
                 RiskLevel.LOW
         );
 
@@ -112,11 +87,8 @@ public class CustomerService {
     }
 
     /**
-     * Shared lookup that throws instead of returning empty.
-     *
-     * <p>Returns the entity rather than a DTO because callers inside this layer
-     * may need to modify it. Package-private: it must not become part of the
-     * service's public surface.
+     * Returns the entity rather than a DTO because callers inside this layer may
+     * need to modify it. Package-private so it stays off the public surface.
      */
     Customer requireByReference(String customerReference) {
         return customerRepository.findByCustomerReference(customerReference)

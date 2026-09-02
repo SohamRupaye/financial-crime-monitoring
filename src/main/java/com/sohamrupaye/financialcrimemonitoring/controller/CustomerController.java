@@ -24,16 +24,12 @@ import java.net.URI;
 /**
  * HTTP entry point for customers.
  *
- * <p>A controller should be boring. Its entire job is: accept a request, hand it
- * to a service, return the result. There is no business logic here and no
- * repository dependency — if a controller ever injects a repository, a layer has
- * been skipped.
+ * <p>A controller should be boring: accept a request, hand it to a service,
+ * return the result. No business logic and no repository — a controller that
+ * injects one has skipped a layer.
  *
- * <p>{@code @RestController} is {@code @Controller} + {@code @ResponseBody}, so
- * return values are serialised to JSON rather than resolved as view names.
- *
- * <p>The {@code /api/v1} prefix is versioned from day one. Adding a version later,
- * once clients exist, is far harder than carrying one from the start.
+ * <p>Versioned from day one. Adding a version once clients exist is far harder
+ * than carrying one from the start.
  */
 @RestController
 @RequestMapping("/api/v1/customers")
@@ -48,15 +44,12 @@ public class CustomerController {
     /**
      * {@code GET /api/v1/customers?page=0&size=20&sort=lastName,asc}
      *
-     * <p>Spring resolves {@link Pageable} straight from those query parameters.
-     * Always paginate collections — an unbounded {@code findAll} over a
+     * <p>Always paginated — an unbounded {@code findAll} over a
      * transaction-scale table is how an API takes down its own database.
      *
-     * <p>{@code riskLevel} is optional; when present the results are filtered.
-     * Spring converts the string to the enum automatically, and an unknown value
-     * becomes a 400 via the type-mismatch handler in
-     * {@code GlobalExceptionHandler} — which had to be added explicitly, since the
-     * default behaviour is an unhelpful 500.
+     * <p>An unknown {@code riskLevel} becomes a 400 through the type-mismatch
+     * handler in {@code GlobalExceptionHandler}, which had to be added
+     * explicitly: the default is an unhelpful 500.
      */
     @GetMapping
     public Page<CustomerResponse> list(
@@ -71,8 +64,7 @@ public class CustomerController {
     /**
      * {@code GET /api/v1/customers/CUST-3F2A9C41}
      *
-     * <p>Keyed by business reference, not database ID. No try/catch for the missing
-     * case: the service throws {@code ResourceNotFoundException} and
+     * <p>No try/catch for the missing case: the service throws and
      * {@code GlobalExceptionHandler} renders the 404.
      */
     @GetMapping("/{customerReference}")
@@ -85,11 +77,8 @@ public class CustomerController {
      *
      * <p>{@code @Valid} is what triggers the constraints on
      * {@link CreateCustomerRequest}; drop it and invalid payloads sail through.
-     * {@code @RequestBody} binds and deserialises the JSON.
-     *
-     * <p>Returns 201 with a {@code Location} header pointing at the new resource,
-     * which is what POST is supposed to do — {@code ResponseEntity} is used here
-     * rather than {@code @ResponseStatus} precisely because a header is needed.
+     * {@code ResponseEntity} rather than {@code @ResponseStatus} because a
+     * {@code Location} header is needed.
      */
     @PostMapping
     public ResponseEntity<CustomerResponse> create(

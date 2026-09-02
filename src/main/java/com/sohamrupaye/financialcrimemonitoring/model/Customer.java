@@ -16,14 +16,6 @@ import java.time.LocalDate;
 /**
  * A person the institution monitors. Root of the AML object graph:
  * customer → account → transaction → risk assessment → alert → case.
- *
- * <p>An entity is a database row, not an API contract. Nothing here is ever
- * returned from a controller directly — see {@code CustomerResponse} for why.
- *
- * <p>Note {@code @Table(name = "customers")}. Spring Boot's naming strategy
- * turns {@code Customer} into {@code customer} and {@code dateOfBirth} into
- * {@code date_of_birth}, so the columns need no annotations but the plural
- * table name does.
  */
 @Entity
 @Table(
@@ -35,15 +27,13 @@ import java.time.LocalDate;
 )
 @Getter
 @Setter
-@NoArgsConstructor // JPA requires a no-arg constructor to hydrate rows.
+@NoArgsConstructor
 public class Customer extends BaseEntity {
 
     /**
-     * Business key shown to clients and used in URLs, e.g. {@code CUST-3F2A9C41}.
-     *
-     * <p>Kept separate from the numeric primary key deliberately: exposing
-     * {@code /customers/1} lets anyone walk your entire customer base by counting
-     * upward, and it leaks how many customers you have.
+     * Business key used in URLs, e.g. {@code CUST-3F2A9C41}. Kept separate from
+     * the primary key: {@code /customers/1} can be walked upward to enumerate
+     * every customer, and leaks how many there are.
      */
     @Column(nullable = false, unique = true, length = 32)
     private String customerReference;
@@ -64,11 +54,8 @@ public class Customer extends BaseEntity {
     private String countryCode;
 
     /**
-     * Current standing risk rating, recalculated as transactions are assessed.
-     *
-     * <p>{@code EnumType.STRING} stores {@code "HIGH"}. The default,
-     * {@code ORDINAL}, would store {@code 2} — and silently corrupt every
-     * existing row if a new constant were ever inserted mid-list.
+     * {@code EnumType.STRING}, not the {@code ORDINAL} default — an ordinal
+     * silently corrupts every existing row if a constant is inserted mid-list.
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

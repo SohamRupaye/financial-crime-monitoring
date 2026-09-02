@@ -6,19 +6,13 @@ import com.sohamrupaye.financialcrimemonitoring.model.Customer;
 /**
  * Translates entities into response DTOs.
  *
- * <p>Kept out of both the entity and the service so neither has to know about the
- * other's shape. A utility class rather than a Spring bean: it holds no state and
- * has no dependencies, so there is nothing to inject and nothing to mock.
- *
- * <p>Hand-written mapping is fine at this size. Once there are a dozen entities
- * and the methods become tedious, MapStruct generates them at compile time —
- * prefer it to reflection-based mappers like ModelMapper, which move mapping
- * mistakes from compile time to production.
+ * <p>Hand-written is fine at this size. MapStruct generates these at compile time
+ * once it gets tedious — preferable to a reflection-based mapper, which moves
+ * mapping mistakes from compile time to production.
  */
 public final class CustomerMapper {
 
     private CustomerMapper() {
-        // Utility class — never instantiated.
     }
 
     public static CustomerResponse toResponse(Customer customer) {

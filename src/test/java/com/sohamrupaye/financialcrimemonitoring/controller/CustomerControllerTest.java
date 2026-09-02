@@ -27,21 +27,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Web slice test — layer 3 of 3.
+ * The MVC layer only: this controller, JSON, validation and
+ * {@code GlobalExceptionHandler}. With the service mocked out, what is under test
+ * is purely the HTTP contract — status codes, headers, JSON shape.
  *
- * <p>{@code @WebMvcTest} starts only the MVC layer: this controller, JSON
- * serialisation, validation and {@code GlobalExceptionHandler}. There is no
- * database and no service — {@code @MockitoBean} replaces
- * {@link CustomerService} in the context, so what is under test is purely the
- * HTTP contract: status codes, headers, JSON shape, validation.
- *
- * <p>{@code @MockitoBean} is the modern replacement for {@code @MockBean}, which
- * is deprecated for removal. Tutorials written before Spring Boot 3.4 will show
- * the old one.
- *
- * <p>{@code addFilters = false} disables the security filter chain. Without it,
- * every request here would be answered by Spring Security rather than the
- * controller, and these assertions would test the wrong thing.
+ * <p>{@code addFilters = false} disables the security chain; without it every
+ * request here is answered by Spring Security instead of the controller.
  */
 @WebMvcTest(CustomerController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -73,7 +64,7 @@ class CustomerControllerTest {
                 .andExpect(jsonPath("$.customerReference").value("CUST-3F2A9C41"))
                 .andExpect(jsonPath("$.fullName").value("Asha Menon"))
                 .andExpect(jsonPath("$.riskLevel").value("LOW"))
-                // The entity's primary key must never appear in the payload.
+                // The primary key must never appear in the payload.
                 .andExpect(jsonPath("$.id").doesNotExist());
     }
 
@@ -83,8 +74,7 @@ class CustomerControllerTest {
         when(customerService.findByReference("CUST-NOPE"))
                 .thenThrow(ResourceNotFoundException.of("Customer", "CUST-NOPE"));
 
-        // Proves GlobalExceptionHandler is wired: the service threw, and the
-        // controller itself contains no error handling whatsoever.
+        // The service threw and the controller contains no error handling.
         mockMvc.perform(get("/api/v1/customers/CUST-NOPE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Resource not found"))
@@ -112,9 +102,8 @@ class CustomerControllerTest {
     @Test
     @DisplayName("GET with an unparseable enum returns 400, not 500")
     void getWithInvalidEnumReturnsBadRequest() throws Exception {
-        // Regression test. This returned 500 before GlobalExceptionHandler grew a
-        // MethodArgumentTypeMismatchException handler, because the catch-all
-        // Exception handler treated a client mistake as a server fault.
+        // Regression test: this was a 500 until GlobalExceptionHandler grew a
+        // type-mismatch handler.
         mockMvc.perform(get("/api/v1/customers").param("riskLevel", "BOGUS"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid parameter"))

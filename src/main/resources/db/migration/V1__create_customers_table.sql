@@ -1,17 +1,6 @@
--- Flyway migration.
---
--- Filename format is mandatory and parsed, not decorative:
---   V1__create_customers_table.sql
---   ^  ^^                      ^
---   |  ||                      └─ .sql
---   |  |└─ description, underscores become spaces in the log
---   |  └─ TWO underscores separate version from description
---   └─ V = versioned (runs once, in order). R = repeatable, U = undo.
---
--- Flyway records each applied file in a `flyway_schema_history` table along with
--- a checksum. Editing an already-applied migration changes that checksum and the
--- next startup fails. Once a migration has run anywhere but your own machine,
--- it is immutable — fix things forward with V2, never by editing V1.
+-- Flyway checksums every applied migration, so editing one that has already run
+-- fails the next startup. Once a migration has run anywhere but your own
+-- machine it is immutable: fix forward with a new version, never by editing.
 
 CREATE TABLE customers
 (
@@ -27,8 +16,7 @@ CREATE TABLE customers
     updated_at         TIMESTAMP(6) WITH TIME ZONE NOT NULL
 );
 
--- Indexes are declared here as well as in @Table(indexes = ...) on the entity.
--- Flyway is what actually creates them; the annotation exists so the mapping
--- documents them and `ddl-auto: validate` can check they are present.
+-- Also declared in @Table(indexes = ...) on the entity. Flyway is what creates
+-- them; the annotation is there so the mapping documents them.
 CREATE INDEX idx_customers_risk_level ON customers (risk_level);
 CREATE INDEX idx_customers_country_code ON customers (country_code);

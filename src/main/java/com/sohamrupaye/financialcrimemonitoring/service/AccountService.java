@@ -20,12 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-/**
- * Business rules for accounts.
- *
- * <p>Structurally identical to {@code CustomerService} — the only new thing is
- * that it has two dependencies instead of one.
- */
+/** Business rules for accounts. */
 @Service
 @Transactional(readOnly = true)
 public class AccountService {
@@ -43,9 +38,7 @@ public class AccountService {
         this.customerRepository = customerRepository;
     }
 
-    /**
-     * One account by its number. 404 when there is no such account.
-     */
+    /** 404 when there is no such account. */
     public AccountResponse findByAccountNumber(String accountNumber) {
         return accountRepository.findByAccountNumber(accountNumber)
                 .map(AccountMapper::toResponse)
@@ -53,13 +46,10 @@ public class AccountService {
     }
 
     /**
-     * Every account belonging to one customer.
-     *
-     * <p>Note the customer lookup on the first line even though the query below
-     * does not need it. Without it, an unknown reference would return an empty
-     * list — indistinguishable from "this customer exists and has no accounts" —
-     * and the endpoint would answer 200 instead of the required 404. The lookup
-     * is what buys the 404.
+     * Note the customer lookup even though the query below does not need it.
+     * Without it an unknown reference returns an empty list, indistinguishable
+     * from a real customer with no accounts, and the endpoint answers 200 instead
+     * of 404. The lookup is what buys the 404.
      */
     public List<AccountResponse> findByCustomerReference(String customerReference) {
         requireCustomer(customerReference);
@@ -70,25 +60,18 @@ public class AccountService {
                 .toList();
     }
 
-    /**
-     * Opens an account for an existing customer.
-     *
-     * <p>{@code @Transactional} without {@code readOnly} — this writes. The
-     * customer lookup and the insert share one transaction.
-     */
+    /** The customer lookup and the insert share one transaction. */
     @Transactional
     public AccountResponse create(String customerReference, CreateAccountRequest request) {
         // 404 before anything else. Nothing is written if the owner is unknown.
         Customer customer = requireCustomer(customerReference);
 
         Account account = new Account(
-                // Server-generated, exactly like CustomerService builds CUST-.
                 generateAccountNumber(),
                 customer,
                 request.currency().toUpperCase(Locale.ROOT),
-                // Every account opens empty. Money arrives through transactions,
-                // never at creation — which is precisely why CreateAccountRequest
-                // has no balance field to read this from.
+                // Every account opens empty, which is why CreateAccountRequest has
+                // no balance field to read this from.
                 BigDecimal.ZERO,
                 LocalDate.now(),
                 request.accountType(),
@@ -100,26 +83,20 @@ public class AccountService {
         log.info("Opened account {} for customer {}",
                 saved.getAccountNumber(), customerReference);
 
-        // Mapping happens here, inside the transaction, so the mapper's lazy
-        // getCustomer() call still has an open session to work with.
+        // Mapped inside the transaction, so the mapper's lazy getCustomer() still
+        // has an open session.
         return AccountMapper.toResponse(saved);
     }
 
-    /**
-     * Loads a customer or throws. Both public methods need this, and neither
-     * should be reachable with a bad reference, so it lives in one place.
-     */
+    /** Loads a customer or throws. */
     private Customer requireCustomer(String customerReference) {
         return customerRepository.findByCustomerReference(customerReference)
                 .orElseThrow(() -> ResourceNotFoundException.of("Customer", customerReference));
     }
 
     /**
-     * {@code ACC-} plus 12 hex characters.
-     *
-     * <p>The {@code replace} matters: a UUID string has hyphens at fixed
-     * positions, so taking the first 12 characters without stripping them would
-     * embed one in the account number.
+     * The {@code replace} matters: a UUID has hyphens at fixed positions, so
+     * taking twelve characters without stripping them would embed one.
      */
     private String generateAccountNumber() {
         return ACCOUNT_NUMBER_PREFIX + UUID.randomUUID()

@@ -16,14 +16,9 @@ import java.time.Instant;
 /**
  * Shared identity and audit columns for every entity.
  *
- * <p>{@code @MappedSuperclass} means this is NOT a table of its own — JPA copies
- * these columns into each subclass's table. Use it for shared state; use
- * {@code @Inheritance} only when you genuinely need polymorphic queries.
- *
- * <p>{@code createdAt} / {@code updatedAt} are filled by Spring Data's auditing
- * listener, which is switched on by {@code JpaAuditingConfig}. For AML work an
- * audit trail is not optional, so it lives on the base class rather than being
- * re-added per entity and forgotten somewhere.
+ * <p>Timestamps are filled by Spring Data's auditing listener, switched on in
+ * {@code JpaAuditingConfig}. For AML work an audit trail is not optional, so it
+ * lives here rather than being re-added per entity and forgotten somewhere.
  */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
@@ -31,12 +26,11 @@ import java.time.Instant;
 public abstract class BaseEntity {
 
     /**
-     * Surrogate key. Meaningless to the business, never shown to API clients —
-     * that is what each entity's own reference field is for.
+     * Surrogate key, never shown to API clients — that is what each entity's own
+     * reference field is for.
      *
-     * <p>{@code IDENTITY} maps to PostgreSQL {@code BIGSERIAL}. It disables JDBC
-     * batch inserts; switch to a {@code SEQUENCE} generator if bulk transaction
-     * ingestion ever needs the throughput.
+     * <p>{@code IDENTITY} disables JDBC batch inserts. Switch to a
+     * {@code SEQUENCE} generator if bulk ingestion ever needs the throughput.
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

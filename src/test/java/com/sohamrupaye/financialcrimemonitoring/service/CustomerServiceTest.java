@@ -26,15 +26,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit test — layer 1 of 3.
- *
- * <p>No Spring context at all. {@code MockitoExtension} wires a mock repository
- * into the service, so this exercises business rules in milliseconds with no
- * database and no Docker. Most of your tests should look like this.
- *
- * <p>Note there is no {@code @SpringBootTest} here. Starting a full context to
- * test an if-statement is the most common way Spring test suites become too slow
- * to run on every save.
+ * Business rules only: no Spring context, no database, no Docker. Starting a
+ * full context to test an if-statement is how a suite becomes too slow to run on
+ * every save.
  */
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceTest {
@@ -58,14 +52,13 @@ class CustomerServiceTest {
     @DisplayName("create() assigns a server-generated reference and LOW risk")
     void createAssignsReferenceAndDefaultRisk() {
         when(customerRepository.existsByEmail("asha.menon@example.com")).thenReturn(false);
-        // Echo back whatever was saved, as a real repository would.
         when(customerRepository.save(any(Customer.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         CustomerResponse response = customerService.create(sampleRequest());
 
         assertThat(response.customerReference()).startsWith("CUST-");
-        // Risk is server-assigned, never client-supplied.
+        // Server-assigned, never client-supplied.
         assertThat(response.riskLevel()).isEqualTo(RiskLevel.LOW);
     }
 
@@ -78,8 +71,6 @@ class CustomerServiceTest {
 
         customerService.create(sampleRequest());
 
-        // ArgumentCaptor inspects what the service actually handed the repository,
-        // which is how you assert on a collaborator's input rather than a return.
         ArgumentCaptor<Customer> captor = ArgumentCaptor.forClass(Customer.class);
         verify(customerRepository).save(captor.capture());
 
