@@ -120,14 +120,20 @@ class RiskAssessmentRepositoryTest {
     }
 
     @Test
-    @DisplayName("re-recording deletes the previous results rather than orphaning them")
-    void reRecordingRemovesOldResults() {
-        RiskAssessment assessment = assessmentWith(25, RiskLevel.LOW,
-                new RiskRuleResult(RuleCode.LARGE_AMOUNT, true, 25, "stale reason"));
+    @DisplayName("re-assessing the same rules updates the rows in place")
+    void reAssessingSameRulesUpdatesInPlace() {
+        RiskAssessment assessment = assessmentWith(45, RiskLevel.MEDIUM,
+                new RiskRuleResult(RuleCode.LARGE_AMOUNT, true, 25, "stale reason"),
+                new RiskRuleResult(RuleCode.VELOCITY, false, 0, null));
         entityManager.flush();
 
-        assessment.record(20, RiskLevel.LOW, NOW.plusSeconds(60),
-                List.of(new RiskRuleResult(RuleCode.VELOCITY, true, 20, "fresh reason")));
+        // The realistic case, and the one that used to fail. A re-run of the
+        // engine reports the same five codes, and clearing the list first does not
+        // work: Hibernate orders inserts before deletes within a flush, so the new
+        // LARGE_AMOUNT row hits the unique constraint before the old one goes.
+        assessment.record(65, RiskLevel.HIGH, NOW.plusSeconds(60), List.of(
+                new RiskRuleResult(RuleCode.LARGE_AMOUNT, true, 25, "fresh reason"),
+                new RiskRuleResult(RuleCode.VELOCITY, true, 20, "burst detected")));
         riskAssessmentRepository.save(assessment);
 
         entityManager.flush();
@@ -137,11 +143,45 @@ class RiskAssessmentRepositoryTest {
                 .findByTransaction_TransactionReference("TXN-00000001")
                 .orElseThrow();
 
-        // orphanRemoval is what makes this one row rather than two. Without it the
-        // old result would linger with a null parent and fail the not-null column.
-        assertThat(reloaded.getRuleResults()).hasSize(1);
-        assertThat(reloaded.getRuleResults().get(0).getReason()).isEqualTo("fresh reason");
-        assertThat(reloaded.getScore()).isEqualTo(20);
+        assertThat(reloaded.getScore()).isEqualTo(65);
+        assertThat(reloaded.getRuleResults()).hasSize(2);
+        assertThat(reloaded.getRuleResults())
+                .filteredOn(result -> result.getRuleCode() == RuleCode.LARGE_AMOUNT)
+                .singleElement()
+                .satisfies(updated -> assertThat(updated.getReason()).isEqualTo("fresh reason"));
+        assertThat(reloaded.getRuleResults())
+                .filteredOn(result -> result.getRuleCode() == RuleCode.VELOCITY)
+                .singleElement()
+                .satisfies(updated -> {
+                    assertThat(updated.isTriggered()).isTrue();
+                    assertThat(updated.getPoints()).isEqualTo(20);
+                });
+    }
+
+    @Test
+    @DisplayName("a rule that no longer reports has its row deleted")
+    void resultForRetiredRuleIsRemoved() {
+        RiskAssessment assessment = assessmentWith(45, RiskLevel.MEDIUM,
+                new RiskRuleResult(RuleCode.LARGE_AMOUNT, true, 25, "over the threshold"),
+                new RiskRuleResult(RuleCode.STRUCTURING, false, 0, null));
+        entityManager.flush();
+
+        // STRUCTURING is absent this time, as it would be if the rule were removed
+        // from the engine. orphanRemoval is what deletes the row rather than
+        // leaving it with a null parent.
+        assessment.record(20, RiskLevel.LOW, NOW.plusSeconds(60),
+                List.of(new RiskRuleResult(RuleCode.VELOCITY, true, 20, "burst detected")));
+        riskAssessmentRepository.save(assessment);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(riskAssessmentRepository
+                .findByTransaction_TransactionReference("TXN-00000001")
+                .orElseThrow()
+                .getRuleResults())
+                .extracting(RiskRuleResult::getRuleCode)
+                .containsExactly(RuleCode.VELOCITY);
     }
 
     @Test

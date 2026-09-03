@@ -55,4 +55,16 @@ public class RiskRuleResult extends BaseEntity {
     void attachTo(RiskAssessment riskAssessment) {
         this.riskAssessment = riskAssessment;
     }
+
+    /**
+     * Overwrites this row's verdict on a re-assessment, keeping its identity.
+     *
+     * <p>The row is reused rather than replaced so that re-evaluation is an
+     * update, not a delete-and-insert — see {@code RiskAssessment.record}.
+     */
+    void overwriteWith(RiskRuleResult fresh) {
+        this.triggered = fresh.triggered;
+        this.points = fresh.points;
+        this.reason = fresh.reason;
+    }
 }

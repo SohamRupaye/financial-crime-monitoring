@@ -176,6 +176,18 @@ class EndToEndMonitoringTest {
                 .andExpect(jsonPath("$.amount").value(495000.0000))
                 .andExpect(jsonPath("$.counterpartyCountry").value("XA"));
 
+        // Re-running the rules against current configuration. Same five codes as
+        // the first pass, which is the case that has to update rows rather than
+        // insert new ones.
+        mockMvc.perform(post("/api/v1/transactions/{ref}/evaluate", transactionReference))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(70))
+                .andExpect(jsonPath("$.rules.length()").value(5));
+
+        // And it does not stack a second alert onto the same finding.
+        mockMvc.perform(get("/api/v1/alerts").param("status", "OPEN"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+
         mockMvc.perform(patch("/api/v1/alerts/{ref}/status", alertReference)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\": \"ACKNOWLEDGED\"}"))

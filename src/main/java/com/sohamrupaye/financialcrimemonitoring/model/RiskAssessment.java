@@ -15,10 +15,14 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import com.sohamrupaye.financialcrimemonitoring.rules.RuleCode;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * What the rules engine concluded about one transaction, and why.
@@ -60,8 +64,8 @@ public class RiskAssessment extends BaseEntity {
     private Instant assessedAt;
 
     /**
-     * {@code orphanRemoval} is what makes re-evaluation work: clearing the list
-     * deletes the old rows instead of leaving them orphaned with a null parent.
+     * {@code orphanRemoval} is what lets a result that is no longer produced be
+     * dropped from the list and deleted rather than orphaned with a null parent.
      */
     /**
      * No {@code @OrderBy}: the column stores the enum name, so ordering by it
@@ -86,11 +90,18 @@ public class RiskAssessment extends BaseEntity {
     }
 
     /**
-     * Replaces the score and every rule result in one go.
+     * Sets the score and every rule result in one go.
      *
      * <p>A single method rather than setters because these four things are only
      * ever meaningful together — a score without the results that produced it is
      * exactly the unexplainable number this class exists to avoid.
+     *
+     * <p>Results are reconciled by rule code rather than cleared and re-added.
+     * Clearing looks simpler and does not work: Hibernate orders inserts before
+     * deletes within a flush, so re-assessing a transaction would insert a second
+     * row for a rule code it already has and break the unique constraint on
+     * {@code (risk_assessment_id, rule_code)}. Matching on the code makes
+     * re-assessment an update, which is also what it actually is.
      */
     public void record(int score, RiskLevel riskLevel, Instant assessedAt,
                        List<RiskRuleResult> results) {
@@ -98,11 +109,23 @@ public class RiskAssessment extends BaseEntity {
         this.riskLevel = riskLevel;
         this.assessedAt = assessedAt;
 
-        this.ruleResults.clear();
-        results.forEach(result -> {
-            result.attachTo(this);
-            this.ruleResults.add(result);
+        Map<RuleCode, RiskRuleResult> existing = new EnumMap<>(RuleCode.class);
+        this.ruleResults.forEach(result -> existing.put(result.getRuleCode(), result));
+
+        results.forEach(fresh -> {
+            RiskRuleResult current = existing.remove(fresh.getRuleCode());
+
+            if (current != null) {
+                current.overwriteWith(fresh);
+            } else {
+                fresh.attachTo(this);
+                this.ruleResults.add(fresh);
+            }
         });
+
+        // Whatever is left was produced by a rule that no longer reports - one
+        // that has been removed, or renamed. orphanRemoval deletes these.
+        this.ruleResults.removeAll(existing.values());
     }
 
     public boolean isAtOrAbove(int threshold) {
